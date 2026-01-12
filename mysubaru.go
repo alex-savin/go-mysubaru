@@ -51,6 +51,29 @@ type Response struct {
 	Data      json.RawMessage `json:"data"`                // Data struct
 }
 
+// apiErrorMessages maps API error codes to human-readable error messages.
+var apiErrorMessages = map[string]string{
+	// G2 API errors
+	"API_ERROR_NO_ACCOUNT":              "Account not found",
+	"API_ERROR_INVALID_ACCOUNT":         "Invalid Account",
+	"API_ERROR_INVALID_CREDENTIALS":     "Invalid Credentials",
+	"API_ERROR_INVALID_TOKEN":           "Invalid Token",
+	"API_ERROR_PASSWORD_WARNING":        "Mutiple failed login attempts, password warning",
+	"API_ERROR_TOO_MANY_ATTEMPTS":       "Too many attempts, please try again later",
+	"API_ERROR_ACCOUNT_LOCKED":          "Account Locked",
+	"API_ERROR_NO_VEHICLES":             "No vehicles found for the account",
+	"API_ERROR_VEHICLE_SETUP":           "Vehicle setup is not complete",
+	"API_ERROR_VEHICLE_NOT_IN_ACCOUNT":  "Vehicle not in account",
+	"API_ERROR_SERVICE_ALREADY_STARTED": "Service already started",
+	"API_ERROR_SOA_403":                 "Unable to parse response body, SOA 403 error",
+	// G1 API errors
+	"API_ERROR_G1_NO_SUBSCRIPTION":         "No subscription found for the vehicle",
+	"API_ERROR_G1_STOLEN_VEHICLE":          "Car is reported as stolen",
+	"API_ERROR_G1_INVALID_PIN":             "Invalid PIN",
+	"API_ERROR_G1_PIN_LOCKED":              "PIN is locked",
+	"API_ERROR_G1_SERVICE_ALREADY_STARTED": "Service already started",
+}
+
 // parse parses the JSON response from the MySubaru API into a Response struct.
 func (r *Response) parse(b []byte, logger *slog.Logger) (*Response, error) {
 	err := json.Unmarshal(b, &r)
@@ -61,48 +84,23 @@ func (r *Response) parse(b []byte, logger *slog.Logger) (*Response, error) {
 
 	if !r.Success && r.ErrorCode != "" {
 		logger.Error("error in response", "errorCode", r.ErrorCode, "dataName", r.DataName)
-		switch r.ErrorCode {
-		// G2 API errors
-		case API_ERRORS["API_ERROR_NO_ACCOUNT"]:
-			return r, errors.New("error in response: Account not found")
-		case API_ERRORS["API_ERROR_INVALID_ACCOUNT"]:
-			return r, errors.New("error in response: Invalid Account")
-		case API_ERRORS["API_ERROR_INVALID_CREDENTIALS"]:
-			return r, errors.New("error in response: Invalid Credentials")
-		case API_ERRORS["API_ERROR_INVALID_TOKEN"]:
-			return r, errors.New("error in response: Invalid Token")
-		case API_ERRORS["API_ERROR_PASSWORD_WARNING"]:
-			return r, errors.New("error in response: Mutiple failed login attempts, password warning")
-		case API_ERRORS["API_ERROR_TOO_MANY_ATTEMPTS"]:
-			return r, errors.New("error in response: Too many attempts, please try again later")
-		case API_ERRORS["API_ERROR_ACCOUNT_LOCKED"]:
-			return r, errors.New("error in response: Account Locked")
-		case API_ERRORS["API_ERROR_NO_VEHICLES"]:
-			return r, errors.New("error in response: No vehicles found for the account")
-		case API_ERRORS["API_ERROR_VEHICLE_SETUP"]:
-			return r, errors.New("error in response: Vehicle setup is not complete")
-		case API_ERRORS["API_ERROR_VEHICLE_NOT_IN_ACCOUNT"]:
-			return r, errors.New("error in response: Vehicle not in account")
-		case API_ERRORS["API_ERROR_SERVICE_ALREADY_STARTED"]:
-			return r, errors.New("error in response: Service already started")
-		case API_ERRORS["API_ERROR_SOA_403"]:
-			return r, errors.New("error in response: Unable to parse response body, SOA 403 error")
-		// G1 API errors
-		case API_ERRORS["API_ERROR_G1_NO_SUBSCRIPTION"]:
-			return r, errors.New("error in response: No subscription found for the vehicle")
-		case API_ERRORS["API_ERROR_G1_STOLEN_VEHICLE"]:
-			return r, errors.New("error in response: Car is reported as stolen")
-		case API_ERRORS["API_ERROR_G1_INVALID_PIN"]:
-			return r, errors.New("error in response: Invalid PIN")
-		case API_ERRORS["API_ERROR_G1_PIN_LOCKED"]:
-			return r, errors.New("error in response: PIN is locked")
-		case API_ERRORS["API_ERROR_G1_SERVICE_ALREADY_STARTED"]:
-			return r, errors.New("error in response: Service already started")
+		if msg := getAPIErrorMessage(r.ErrorCode); msg != "" {
+			return r, errors.New("error in response: " + msg)
 		}
 		return r, errors.New("error in response: " + r.ErrorCode)
 	}
 
 	return r, nil
+}
+
+// getAPIErrorMessage looks up the error message for a given API error code.
+func getAPIErrorMessage(errorCode string) string {
+	for key, msg := range apiErrorMessages {
+		if API_ERRORS[key] == errorCode {
+			return msg
+		}
+	}
+	return ""
 }
 
 // Request represents the structure of a request to the MySubaru API.
@@ -274,19 +272,6 @@ type GeoPosition struct {
 	Timestamp CustomTime1 `json:"timestamp"`         // "2021-12-22T13:14:47"
 }
 
-// type GeoPositionTime time.Time
-
-// func (g *GeoPositionTime) UnmarshalJSON(b []byte) error {
-// 	s := strings.Trim(string(b), "\"")
-// 	t, err := time.Parse("2006-01-02T15:04:05", s)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	*g = GeoPositionTime(t)
-
-// 	return nil
-// }
-
 // VehicleStatus .
 type VehicleStatus struct {
 	VehicleId                                int64    `json:"vhsId"`                                        // + 9969776690 5198812434
@@ -450,23 +435,11 @@ func (sr *ServiceRequest) parse(b []byte, logger *slog.Logger) error {
 	return nil
 }
 
-// climateSettings:             [ climateSettings ]
-// climateZoneFrontTempCelsius: [for _ in range(15, 30 + 1)]
-// climateZoneFrontTemp:        [for _ in range(60, 85 + 1)]
-// climateZoneFrontAirVolume:   [ AUTO | 2 | 4 | 7 ]
-// heatedSeatFrontLeft:         [ OFF | LOW_HEAT | MEDIUM_HEAT | HIGH_HEAT ]
-// heatedSeatFrontRight:        [ OFF | LOW_HEAT | MEDIUM_HEAT | HIGH_HEAT ]
-// climateZoneFrontAirMode:     [ WINDOW | FEET_WINDOW | FACE | FEET | FEET_FACE_BALANCED | AUTO ]
-// outerAirCirculation:         [ outsideAir, recirculation ]
-// airConditionOn:              [ false | true ]
-// heatedRearWindowActive:      [ false | true ]
-// startConfiguration:          [ START_CLIMATE_CONTROL_ONLY_ALLOW_KEY_IN_IGNITION | START_ENGINE_ALLOW_KEY_IN_IGNITION ]
-// runTimeMinutes:              [ 10 ]
-
 type VehicleHealth struct {
 	VehicleHealthItems []VehicleHealthItem `json:"vehicleHealthItems"`
 	LastUpdatedDate    int64               `json:"lastUpdatedDate"`
 }
+
 type VehicleHealthItem struct {
 	WarningCode int        `json:"warningCode"`       // internal code used by MySubaru, not documented
 	B2cCode     string     `json:"b2cCode"`           // oilTemp | airbag | oilLevel | etc.
@@ -476,12 +449,6 @@ type VehicleHealthItem struct {
 	OnDates     []UnixTime `json:"onDates,omitempty"` // List of the timestamps
 }
 
-// ErrorResponse .
-// "dataName":"errorResponse"
-// {"success":false,"errorCode":"404-soa-unableToParseResponseBody","dataName":"errorResponse","data":{"errorLabel":"404-soa-unableToParseResponseBody","errorDescription":null}}
-// {"success":false,"errorCode":"vehicleNotInAccount","dataName":null,"data":null}
-// {"httpCode":500,"errorCode":"error","errorMessage":"java.lang.NullPointerException - null"}
-// {"success":false,"errorCode":"InvalidCredentials","dataName":"remoteServiceStatus","data":{"serviceRequestId":null,"success":false,"cancelled":false,"remoteServiceType":null,"remoteServiceState":null,"subState":null,"errorCode":null,"result":null,"updateTime":null,"vin":null,"errorDescription":"The credentials supplied are invalid, tries left 2"}}
 type ErrorResponse struct {
 	ErrorLabel       string `json:"errorLabel"`                 // "404-soa-unableToParseResponseBody"
 	ErrorDescription string `json:"errorDescription,omitempty"` // null

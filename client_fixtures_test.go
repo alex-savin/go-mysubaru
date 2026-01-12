@@ -455,3 +455,54 @@ func TestErrorResponseHandling(t *testing.T) {
 		t.Error("expected config to be created")
 	}
 }
+
+// endpointRoute defines a route for the mock endpoint router.
+type endpointRoute struct {
+	Method   string // HTTP method (GET, POST)
+	Path     string // URL path (without MOBILE_API_VERSION prefix)
+	Response string // JSON response string
+}
+
+// mockEndpointRouter creates a mock HTTP handler that routes requests based on path and method.
+// This reduces cyclomatic complexity in tests by centralizing endpoint routing logic.
+func mockEndpointRouter(routes []endpointRoute) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		for _, route := range routes {
+			fullPath := MOBILE_API_VERSION + route.Path
+			// Also check for paths with api_gen replacement
+			g1Path := MOBILE_API_VERSION + strings.ReplaceAll(route.Path, "api_gen", "g1")
+			g2Path := MOBILE_API_VERSION + strings.ReplaceAll(route.Path, "api_gen", "g2")
+
+			matchesPath := r.URL.Path == fullPath || r.URL.Path == g1Path || r.URL.Path == g2Path
+			matchesMethod := route.Method == "" || r.Method == route.Method
+
+			if matchesPath && matchesMethod {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, route.Response)
+				return
+			}
+		}
+
+		// Default success response for unmatched endpoints
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"success":true,"errorCode":null,"dataName":null,"data":null}`)
+	}
+}
+
+// mockServerWithRoutes creates a mock server with the given routes on the standard test port.
+func mockServerWithRoutes(t *testing.T, routes []endpointRoute) *httptest.Server {
+	t.Helper()
+
+	l, err := net.Listen("tcp", "127.0.0.1:56765")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+
+	ts := httptest.NewUnstartedServer(mockEndpointRouter(routes))
+	ts.Listener.Close()
+	ts.Listener = l
+
+	return ts
+}

@@ -84,58 +84,33 @@ func vinCheck(vin string) (bool, string) {
 }
 
 // transcodeDigits transcodes VIN digits to a numeric value
+// vinCharCodes maps VIN characters to their numeric code values.
+var vinCharCodes = map[rune]int{
+	'A': 1, 'J': 1, '1': 1,
+	'B': 2, 'K': 2, 'S': 2, '2': 2,
+	'C': 3, 'L': 3, 'T': 3, '3': 3,
+	'D': 4, 'M': 4, 'U': 4, '4': 4,
+	'E': 5, 'N': 5, 'V': 5, '5': 5,
+	'F': 6, 'W': 6, '6': 6,
+	'G': 7, 'P': 7, 'X': 7, '7': 7,
+	'H': 8, 'Y': 8, '8': 8,
+	'R': 9, 'Z': 9, '9': 9,
+	'I': 0, 'O': 0, 'Q': 0, '0': 0,
+}
+
+// vinPositionWeights maps VIN positions (1-based) to their weight multipliers.
+var vinPositionWeights = map[int]int{
+	1: 8, 2: 7, 3: 6, 4: 5, 5: 4, 6: 3, 7: 2, 8: 10, 9: 0, 10: 9,
+	11: 8, 12: 7, 13: 6, 14: 5, 15: 4, 16: 3, 17: 2,
+}
+
 func transcodeDigits(vin string) int {
-	var digitSum = 0
-	var code int
+	var digitSum int
 	for i, chr := range vin {
-		code = 0
-
-		switch chr {
-		case 'A', 'J', '1':
-			code = 1
-		case 'B', 'K', 'S', '2':
-			code = 2
-		case 'C', 'L', 'T', '3':
-			code = 3
-		case 'D', 'M', 'U', '4':
-			code = 4
-		case 'E', 'N', 'V', '5':
-			code = 5
-		case 'F', 'W', '6':
-			code = 6
-		case 'G', 'P', 'X', '7':
-			code = 7
-		case 'H', 'Y', '8':
-			code = 8
-		case 'R', 'Z', '9':
-			code = 9
-		case 'I', 'O', 'Q':
-			code = 0
-		}
-		switch i + 1 {
-		case 1, 11:
-			digitSum += code * 8
-		case 2, 12:
-			digitSum += code * 7
-		case 3, 13:
-			digitSum += code * 6
-		case 4, 14:
-			digitSum += code * 5
-		case 5, 15:
-			digitSum += code * 4
-		case 6, 16:
-			digitSum += code * 3
-		case 7, 17:
-			digitSum += code * 2
-		case 8:
-			digitSum += code * 10
-		case 9:
-			digitSum += code * 0
-		case 10:
-			digitSum += code * 9
-		}
+		code := vinCharCodes[chr]
+		weight := vinPositionWeights[i+1]
+		digitSum += code * weight
 	}
-
 	return digitSum
 }
 

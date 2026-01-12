@@ -344,36 +344,7 @@ func (v *Vehicle) EngineStartWithProfile(run, delay int, horn bool, profileName 
 	// Apply profile overrides if present
 	if profileName != "" {
 		if cp, ok := v.ClimateProfiles[profileName]; ok {
-			if cp.ClimateZoneFrontTemp != 0 {
-				params["climateZoneFrontTemp"] = strconv.Itoa(cp.ClimateZoneFrontTemp)
-			}
-			if cp.ClimateZoneFrontAirMode != "" {
-				params["climateZoneFrontAirMode"] = cp.ClimateZoneFrontAirMode
-			}
-			if cp.ClimateZoneFrontAirVolume != "" {
-				params["climateZoneFrontAirVolume"] = cp.ClimateZoneFrontAirVolume
-			}
-			if cp.HeatedSeatFrontLeft != "" {
-				params["heatedSeatFrontLeft"] = cp.HeatedSeatFrontLeft
-			}
-			if cp.HeatedSeatFrontRight != "" {
-				params["heatedSeatFrontRight"] = cp.HeatedSeatFrontRight
-			}
-			if cp.HeatedRearWindowActive != "" {
-				params["heatedRearWindowActive"] = cp.HeatedRearWindowActive
-			}
-			if cp.OuterAirCirculation != "" {
-				params["outerAirCirculation"] = cp.OuterAirCirculation
-			}
-			if cp.AirConditionOn != "" {
-				params["airConditionOn"] = cp.AirConditionOn
-			}
-			if cp.RunTimeMinutes != 0 {
-				params["runTimeMinutes"] = strconv.Itoa(cp.RunTimeMinutes)
-			}
-			if cp.StartConfiguration != "" {
-				params["startConfiguration"] = cp.StartConfiguration
-			}
+			applyClimateProfile(params, cp)
 		}
 	}
 
@@ -387,6 +358,40 @@ func (v *Vehicle) EngineStartWithProfile(run, delay int, horn bool, profileName 
 	}()
 
 	return ch, nil
+}
+
+// applyClimateProfile applies climate profile settings to the params map.
+func applyClimateProfile(params map[string]string, cp ClimateProfile) {
+	if cp.ClimateZoneFrontTemp != 0 {
+		params["climateZoneFrontTemp"] = strconv.Itoa(cp.ClimateZoneFrontTemp)
+	}
+	if cp.ClimateZoneFrontAirMode != "" {
+		params["climateZoneFrontAirMode"] = cp.ClimateZoneFrontAirMode
+	}
+	if cp.ClimateZoneFrontAirVolume != "" {
+		params["climateZoneFrontAirVolume"] = cp.ClimateZoneFrontAirVolume
+	}
+	if cp.HeatedSeatFrontLeft != "" {
+		params["heatedSeatFrontLeft"] = cp.HeatedSeatFrontLeft
+	}
+	if cp.HeatedSeatFrontRight != "" {
+		params["heatedSeatFrontRight"] = cp.HeatedSeatFrontRight
+	}
+	if cp.HeatedRearWindowActive != "" {
+		params["heatedRearWindowActive"] = cp.HeatedRearWindowActive
+	}
+	if cp.OuterAirCirculation != "" {
+		params["outerAirCirculation"] = cp.OuterAirCirculation
+	}
+	if cp.AirConditionOn != "" {
+		params["airConditionOn"] = cp.AirConditionOn
+	}
+	if cp.RunTimeMinutes != 0 {
+		params["runTimeMinutes"] = strconv.Itoa(cp.RunTimeMinutes)
+	}
+	if cp.StartConfiguration != "" {
+		params["startConfiguration"] = cp.StartConfiguration
+	}
 }
 
 // EngineStop
@@ -1431,7 +1436,6 @@ func (v *Vehicle) getRemoteOptionsStatus() bool {
 // parseParts parses vehicle component data from API responses and updates the corresponding
 // vehicle structures (doors, windows, tires) based on the field name and value.
 func (v *Vehicle) parseParts(name string, value any) {
-	// re := regexp.MustCompile(`[A-Z][^A-Z]*`)
 	re := regexp.MustCompile(`([Dd]oor|[Ww]indow|[Tt]ire)(?:[Pp]ressure)?([Ff]ront|[Rr]ear|[Bb]oot|[Ee]ngine[Hh]ood|[Ss]unroof)([Ll]eft|[Rr]ight)?([Pp]osition|[Ss]tatus|[Ll]ock[Ss]tatus|[Pp]si)?`)
 	grps := re.FindStringSubmatch(name)
 
@@ -1439,118 +1443,99 @@ func (v *Vehicle) parseParts(name string, value any) {
 		return
 	}
 
-	pn := grps[1] + "_" + grps[2]
+	pn := strings.ToLower(grps[1] + "_" + grps[2])
 	if len(grps[3]) > 0 {
-		pn = pn + "_" + grps[3]
+		pn = pn + "_" + strings.ToLower(grps[3])
 	}
-	pn = strings.ToLower(pn)
 
-	switch grps[1] {
-	case "Door", "door":
-		if d, ok := v.Doors[pn]; ok {
-			if grps[4] == "Position" {
-				if s, ok := value.(string); ok {
-					d.Status = strings.ToUpper(strings.TrimSpace(s))
-				}
-			}
-			if grps[4] == "LockStatus" {
-				if s, ok := value.(string); ok {
-					d.Lock = strings.ToUpper(strings.TrimSpace(s))
-				}
-			}
-			d.Updated = time.Now()
-			v.Doors[pn] = d
-		} else {
-			d = Door{
-				Position: grps[2],
-				Updated:  time.Now(),
-			}
-			if grps[4] == "Position" {
-				if s, ok := value.(string); ok {
-					d.Status = strings.ToUpper(strings.TrimSpace(s))
-				}
-			}
-			if grps[4] == "LockStatus" {
-				if s, ok := value.(string); ok {
-					d.Lock = strings.ToUpper(strings.TrimSpace(s))
-				}
-			}
-			v.Doors[pn] = d
-			if grps[3] != "" {
-				if d, ok := v.Doors[pn]; ok {
-					d.SubPosition = grps[3]
-					v.Doors[pn] = d
-				}
-			}
-		}
-	case "Window", "window":
-		if w, ok := v.Windows[pn]; ok {
-			if s, ok := value.(string); ok {
-				w.Status = s
-			}
-			w.Updated = time.Now()
-			v.Windows[pn] = w
-		} else {
-			w := Window{
-				Position: grps[2],
-				Updated:  time.Now(),
-			}
-			if s, ok := value.(string); ok {
-				w.Status = s
-			}
-			v.Windows[pn] = w
-			if grps[3] != "" {
-				if w, ok := v.Windows[pn]; ok {
-					w.SubPosition = grps[3]
-					v.Windows[pn] = w
-				}
-			}
-		}
-	case "Tire", "tire":
-		if t, ok := v.Tires[pn]; ok {
-			if grps[4] == "Psi" {
-				switch v := value.(type) {
-				case int:
-					t.PressurePsi = v
-				case float64:
-					t.PressurePsi = int(v)
-				}
-			} else {
-				// Raw pressure value (not PSI)
-				switch v := value.(type) {
-				case int:
-					t.Pressure = v
-				case float64:
-					t.Pressure = int(v)
-				}
-			}
-			t.Updated = time.Now()
-			v.Tires[pn] = t
-		} else {
-			t := Tire{
-				Position:    grps[2],
-				SubPosition: grps[3],
-				Updated:     time.Now(),
-			}
-			if grps[4] == "Psi" {
-				switch v := value.(type) {
-				case int:
-					t.PressurePsi = v
-				case float64:
-					t.PressurePsi = int(v)
-				}
-			} else {
-				// Raw pressure value (not PSI)
-				switch v := value.(type) {
-				case int:
-					t.Pressure = v
-				case float64:
-					t.Pressure = int(v)
-				}
-			}
-			v.Tires[pn] = t
+	partType := strings.ToLower(grps[1])
+	switch partType {
+	case "door":
+		v.parseDoor(pn, grps, value)
+	case "window":
+		v.parseWindow(pn, grps, value)
+	case "tire":
+		v.parseTire(pn, grps, value)
+	}
+}
+
+// parseDoor handles door-specific parsing logic.
+func (v *Vehicle) parseDoor(pn string, grps []string, value any) {
+	d, exists := v.Doors[pn]
+	if !exists {
+		d = Door{
+			Position:    grps[2],
+			SubPosition: grps[3],
 		}
 	}
+
+	v.applyDoorValue(&d, grps[4], value)
+	d.Updated = time.Now()
+	v.Doors[pn] = d
+}
+
+// applyDoorValue applies the value to the appropriate door field based on the field type.
+func (v *Vehicle) applyDoorValue(d *Door, fieldType string, value any) {
+	s, ok := value.(string)
+	if !ok {
+		return
+	}
+	normalized := strings.ToUpper(strings.TrimSpace(s))
+
+	switch fieldType {
+	case "Position":
+		d.Status = normalized
+	case "LockStatus":
+		d.Lock = normalized
+	}
+}
+
+// parseWindow handles window-specific parsing logic.
+func (v *Vehicle) parseWindow(pn string, grps []string, value any) {
+	w, exists := v.Windows[pn]
+	if !exists {
+		w = Window{
+			Position:    grps[2],
+			SubPosition: grps[3],
+		}
+	}
+
+	if s, ok := value.(string); ok {
+		w.Status = s
+	}
+	w.Updated = time.Now()
+	v.Windows[pn] = w
+}
+
+// parseTire handles tire-specific parsing logic.
+func (v *Vehicle) parseTire(pn string, grps []string, value any) {
+	t, exists := v.Tires[pn]
+	if !exists {
+		t = Tire{
+			Position:    grps[2],
+			SubPosition: grps[3],
+		}
+	}
+
+	pressure := toInt(value)
+	if grps[4] == "Psi" {
+		t.PressurePsi = pressure
+	} else {
+		t.Pressure = pressure
+	}
+	t.Updated = time.Now()
+	v.Tires[pn] = t
+}
+
+// toInt converts a value to int, supporting int and float64 types.
+func toInt(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	}
+	return 0
 }
 
 // SetGeoFence sets up a geofence for the vehicle with specified parameters.
