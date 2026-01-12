@@ -506,7 +506,7 @@ func (u *UnixTime) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON turns our time.Time back into an int
 func (u UnixTime) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%d", (u.Time.Unix()))), nil
+	return []byte(fmt.Sprintf("%d", u.Unix())), nil
 }
 
 // CustomTime1 "2021-12-22T13:14:47" is a custom type for unmarshalling time strings without timezone

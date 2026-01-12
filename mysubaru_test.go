@@ -48,7 +48,7 @@ func TestUnixTime_UnmarshalJSON(t *testing.T) {
 				t.Errorf("UnmarshalJSON() error = %v, wantError %v", err, tt.wantError)
 				return
 			}
-			if !tt.wantError && !ut.Time.Equal(tt.wantTime) {
+			if !tt.wantError && !ut.Equal(tt.wantTime) {
 				t.Errorf("UnmarshalJSON() got = %v, want %v", ut.Time, tt.wantTime)
 			}
 		})
@@ -66,7 +66,7 @@ func TestUnixTime_UnmarshalJSON_withJSONUnmarshal(t *testing.T) {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 	want := time.Unix(1700000000, 0)
-	if !ts.Time.Time.Equal(want) {
+	if !ts.Time.Equal(want) {
 		t.Errorf("UnmarshalJSON() got = %v, want %v", ts.Time.Time, want)
 	}
 }
@@ -240,7 +240,7 @@ func TestCustomTime1_UnmarshalJSON(t *testing.T) {
 				t.Errorf("UnmarshalJSON() error = %v, wantError %v", err, tt.wantError)
 				return
 			}
-			if !tt.wantError && !ct.Time.Equal(tt.wantTime) {
+			if !tt.wantError && !ct.Equal(tt.wantTime) {
 				t.Errorf("UnmarshalJSON() got time = %v, want %v", ct.Time, tt.wantTime)
 			}
 		})
@@ -316,7 +316,7 @@ func TestCustomTime2_UnmarshalJSON(t *testing.T) {
 				t.Errorf("UnmarshalJSON() error = %v, wantError %v", err, tt.wantError)
 				return
 			}
-			if !tt.wantError && !ct.Time.Equal(tt.wantTime) {
+			if !tt.wantError && !ct.Equal(tt.wantTime) {
 				t.Errorf("UnmarshalJSON() got time = %v, want %v", ct.Time, tt.wantTime)
 			}
 		})

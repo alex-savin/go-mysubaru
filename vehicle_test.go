@@ -494,9 +494,9 @@ func TestGetVehicleStatus_SkipsInvalidFuelPercent(t *testing.T) {
 // the computed EV field for backwards compatibility with clients.
 func TestVehicleMarshalJSON_EVField(t *testing.T) {
 	tests := []struct {
-		name       string
-		features   []string
-		expectEV   bool
+		name     string
+		features []string
+		expectEV bool
 	}{
 		{
 			name:     "PHEV vehicle should have EV:true",

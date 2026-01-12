@@ -517,17 +517,18 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 	req := c.httpClient.R().SetContext(ctx)
 
 	// Set parameters based on method
-	if method == GET {
+	switch method {
+	case GET:
 		req.SetQueryParams(params)
 		resp, err = req.Get(url)
-	} else if method == POST {
+	case POST:
 		if j {
 			req.SetBody(params)
 		} else {
 			req.SetFormData(params)
 		}
 		resp, err = req.Post(url)
-	} else {
+	default:
 		c.metrics.RecordRequest(method, url, time.Since(start), false)
 		return nil, pkgerrors.New("unsupported HTTP method: " + method)
 	}
