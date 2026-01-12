@@ -1069,27 +1069,8 @@ func (v *Vehicle) DeleteClimateUserPreset(presetName string) error {
 }
 
 // GetVehicleStatus .
-func (v *Vehicle) GetVehicleStatus() error {
-	if err := v.validateSubscriptionAndSession(); err != nil {
-		return err
-	}
-
-	v.ensureVehicleSelected()
-	reqUrl := MOBILE_API_VERSION + urlToGen(apiURLs["API_VEHICLE_STATUS"], v.getAPIGen())
-	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
-	if err != nil {
-		v.client.logger.Error("error while executing GetVehicleStatus request", "request", "GetVehicleStatus", "error", err.Error())
-		return err
-	}
-	// v.client.logger.Info("http request output", "request", "GetVehicleStatus", "body", resp)
-
-	var vs VehicleStatus
-	err = json.Unmarshal(resp.Data, &vs)
-	if err != nil {
-		v.client.logger.Error("error while parsing json", "request", "GetVehicleStatus", "error", err.Error())
-	}
-	// v.client.logger.Debug("http request output", "request", "GetVehicleStatus", "body", vs)
-
+// updateVehicleFromStatus updates basic vehicle fields from VehicleStatus data.
+func (v *Vehicle) updateVehicleFromStatus(vs *VehicleStatus) {
 	v.EngineState = vs.VehicleStateType
 	v.Odometer.Miles = vs.OdometerValue
 	v.Odometer.Kilometers = vs.OdometerValueKm
@@ -1102,33 +1083,60 @@ func (v *Vehicle) GetVehicleStatus() error {
 	}
 	v.FuelConsumptionAvg.MPG = float64(vs.AvgFuelConsumptionMpg)
 	v.FuelConsumptionAvg.LP100Km = float64(vs.AvgFuelConsumptionLitersPer100Kilometers)
-
 	v.GeoLocation.Latitude = float64(vs.Latitude)
 	v.GeoLocation.Longitude = float64(vs.Longitude)
 	v.GeoLocation.Heading = vs.Heading
+}
 
-	// Parse EV-specific fields if this is an EV
-	if v.IsEV() {
-		v.EVStatus.StateOfChargePercent = int(vs.EvStateOfChargePercent)
-		v.EVStatus.DistanceToEmptyMiles = vs.EvDistanceToEmptyMiles
-		v.EVStatus.DistanceToEmptyKm = vs.EvDistanceToEmptyKilometers
-		v.EVStatus.DistanceToEmptyByStateMiles = vs.EvDistanceToEmptyByStateMiles
-		v.EVStatus.DistanceToEmptyByStateKm = vs.EvDistanceToEmptyByStateKilometers
+// updateEVStatusFromStatus updates EV-specific fields if this is an EV.
+func (v *Vehicle) updateEVStatusFromStatus(vs *VehicleStatus) {
+	if !v.IsEV() {
+		return
 	}
+	v.EVStatus.StateOfChargePercent = int(vs.EvStateOfChargePercent)
+	v.EVStatus.DistanceToEmptyMiles = vs.EvDistanceToEmptyMiles
+	v.EVStatus.DistanceToEmptyKm = vs.EvDistanceToEmptyKilometers
+	v.EVStatus.DistanceToEmptyByStateMiles = vs.EvDistanceToEmptyByStateMiles
+	v.EVStatus.DistanceToEmptyByStateKm = vs.EvDistanceToEmptyByStateKilometers
+}
+
+// isPartField checks if a field name represents a parseable vehicle part.
+func isPartField(name string) bool {
+	return (strings.HasPrefix(name, "Door") && strings.HasSuffix(name, "Position")) ||
+		(strings.HasPrefix(name, "Door") && strings.HasSuffix(name, "LockStatus")) ||
+		(strings.HasPrefix(name, "Window") && strings.HasSuffix(name, "Status")) ||
+		strings.HasPrefix(name, "TirePressure")
+}
+
+func (v *Vehicle) GetVehicleStatus() error {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
+	}
+
+	v.ensureVehicleSelected()
+	reqUrl := MOBILE_API_VERSION + urlToGen(apiURLs["API_VEHICLE_STATUS"], v.getAPIGen())
+	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
+	if err != nil {
+		v.client.logger.Error("error while executing GetVehicleStatus request", "request", "GetVehicleStatus", "error", err.Error())
+		return err
+	}
+
+	var vs VehicleStatus
+	if err = json.Unmarshal(resp.Data, &vs); err != nil {
+		v.client.logger.Error("error while parsing json", "request", "GetVehicleStatus", "error", err.Error())
+	}
+
+	v.updateVehicleFromStatus(&vs)
+	v.updateEVStatusFromStatus(&vs)
 
 	val := reflect.ValueOf(vs)
 	typeOfS := val.Type()
-
 	for i := 0; i < val.NumField(); i++ {
-		// v.client.logger.Debug("vehicle status >> parsing a car part", "field", typeOfS.Field(i).Name, "value", val.Field(i).Interface(), "type", val.Field(i).Type())
 		if isBadValue(val.Field(i).Interface()) {
 			continue
 		}
 		name := typeOfS.Field(i).Name
-		if strings.HasPrefix(name, "Door") && strings.HasSuffix(name, "Position") ||
-			strings.HasPrefix(name, "Door") && strings.HasSuffix(name, "LockStatus") ||
-			strings.HasPrefix(name, "Window") && strings.HasSuffix(name, "Status") ||
-			strings.HasPrefix(name, "TirePressure") {
+		if isPartField(name) {
 			v.parseParts(name, val.Field(i).Interface())
 		}
 	}

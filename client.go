@@ -501,50 +501,79 @@ func (c *Client) executeWithRetry(method string, url string, params map[string]s
 }
 
 // executeOnce performs a single HTTP request attempt
-func (c *Client) executeOnce(method string, url string, params map[string]string, j bool) (*Response, error) {
-	start := time.Now()
-
-	c.Lock()
-	defer c.Unlock() // Ensure unlock happens even on early return
-
-	var resp *resty.Response
-	var err error
-
-	// Create a request with context and timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	req := c.httpClient.R().SetContext(ctx)
-
-	// Set parameters based on method
+// sendRequest executes the HTTP request based on method type.
+func (c *Client) sendRequest(req *resty.Request, method, url string, params map[string]string, j bool) (*resty.Response, error) {
 	switch method {
 	case GET:
 		req.SetQueryParams(params)
-		resp, err = req.Get(url)
+		return req.Get(url)
 	case POST:
 		if j {
 			req.SetBody(params)
 		} else {
 			req.SetFormData(params)
 		}
-		resp, err = req.Post(url)
+		return req.Post(url)
 	default:
-		c.metrics.RecordRequest(method, url, time.Since(start), false)
 		return nil, pkgerrors.New("unsupported HTTP method: " + method)
 	}
+}
 
+// handleAPIError logs error response details if available.
+func (c *Client) handleAPIError(r *Response) {
+	if r.DataName != "errorResponse" {
+		return
+	}
+	var er ErrorResponse
+	if jsonErr := json.Unmarshal(r.Data, &er); jsonErr != nil {
+		c.logger.Error("error parsing error response", "error", jsonErr.Error())
+		return
+	}
+	if _, known := API_ERRORS[er.ErrorLabel]; known {
+		c.logger.Error("known API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
+	} else {
+		c.logger.Error("unknown API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
+	}
+}
+
+// handleVehicleSetupError handles the VEHICLESETUPERROR case and returns response/error accordingly.
+func (c *Client) handleVehicleSetupError(r *Response, method, url string, duration time.Duration) (*Response, error) {
+	// With vehicle data: treat as success (user needs to complete setup but data is functional)
+	if r.DataName == "vehicle" {
+		c.logger.Warn("VEHICLESETUPERROR received but vehicle data is present; treating as success",
+			"errorCode", r.ErrorCode, "dataName", r.DataName)
+		c.metrics.RecordRequest(method, url, duration, true)
+		c.isAlive = true
+		return r, nil
+	}
+	// Without vehicle data: reset session and allow retry
+	c.logger.Warn("VEHICLESETUPERROR received without vehicle data; resetting session",
+		"errorCode", r.ErrorCode, "dataName", r.DataName)
+	c.resetSession()
+	c.metrics.RecordRequest(method, url, duration, false)
+	return nil, APIError{Code: r.ErrorCode, Message: "VEHICLESETUPERROR: session reset, please retry", Retryable: true}
+}
+
+func (c *Client) executeOnce(method string, url string, params map[string]string, j bool) (*Response, error) {
+	start := time.Now()
+
+	c.Lock()
+	defer c.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req := c.httpClient.R().SetContext(ctx)
+	resp, err := c.sendRequest(req, method, url, params, j)
 	if err != nil {
-		duration := time.Since(start)
-		c.metrics.RecordRequest(method, url, duration, false)
+		c.metrics.RecordRequest(method, url, time.Since(start), false)
 		c.metrics.RecordError("network_error")
 		c.logger.Error("error while executing HTTP request", "method", method, "url", url, "error", err.Error())
 		return nil, ErrNetworkError
 	}
 
-	// Read response body
 	resBytes, err := io.ReadAll(resp.Body)
 	duration := time.Since(start)
-
 	if err != nil {
 		c.metrics.RecordRequest(method, url, duration, false)
 		c.metrics.RecordError("response_read_error")
@@ -553,10 +582,8 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 	}
 	c.logger.Debug("received HTTP response", "method", method, "url", url, "status", resp.Status(), "body", string(resBytes))
 
-	// Update cookies
 	c.httpClient.SetCookies(resp.Cookies())
 
-	// Parse response
 	r, ok := c.parseResponse(resBytes)
 	if !ok {
 		c.metrics.RecordRequest(method, url, duration, false)
@@ -565,86 +592,32 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 		return nil, pkgerrors.New("failed to parse response")
 	}
 
-	// Handle success
 	if resp.IsSuccess() && r.Success {
 		c.metrics.RecordRequest(method, url, duration, true)
 		c.isAlive = true
 		return &r, nil
 	}
 
-	// Handle API errors
-	if r.DataName == "errorResponse" {
-		var er ErrorResponse
-		if jsonErr := json.Unmarshal(r.Data, &er); jsonErr != nil {
-			c.logger.Error("error parsing error response", "error", jsonErr.Error())
-		} else {
-			if _, known := API_ERRORS[er.ErrorLabel]; known {
-				c.logger.Error("known API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
-			} else {
-				c.logger.Error("unknown API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
-			}
-		}
-	}
+	c.handleAPIError(&r)
 
-	// Provide more informative error messages
 	if resp.IsSuccess() && !r.Success {
-		// HTTP 200 but API returned success=false - log additional details for debugging
 		c.logger.Warn("API returned success=false despite HTTP 200",
-			"method", method,
-			"url", url,
-			"errorCode", r.ErrorCode,
-			"dataName", r.DataName)
+			"method", method, "url", url, "errorCode", r.ErrorCode, "dataName", r.DataName)
 
-		// VEHICLESETUPERROR with vehicle data is a special case - the response still contains
-		// valid vehicle information that can be used. This error typically indicates the user
-		// needs to complete some setup in the official MySubaru app, but the vehicle data is
-		// still functional for our purposes.
-		if r.ErrorCode == API_ERRORS["API_ERROR_VEHICLE_SETUP"] && r.DataName == "vehicle" {
-			c.logger.Warn("VEHICLESETUPERROR received but vehicle data is present; treating as success",
-				"errorCode", r.ErrorCode,
-				"dataName", r.DataName)
-			c.metrics.RecordRequest(method, url, duration, true)
-			c.isAlive = true
-			return &r, nil
-		}
-
-		// VEHICLESETUPERROR without vehicle data indicates a stale session - reset and allow retry.
-		// This matches the behavior in subarulink where session is reset on this error.
-		if r.ErrorCode == API_ERRORS["API_ERROR_VEHICLE_SETUP"] && r.DataName != "vehicle" {
-			c.logger.Warn("VEHICLESETUPERROR received without vehicle data; resetting session",
-				"errorCode", r.ErrorCode,
-				"dataName", r.DataName)
-			c.resetSession()
-			c.metrics.RecordRequest(method, url, duration, false)
-			// Return retryable error to trigger re-auth
-			return nil, APIError{
-				Code:      r.ErrorCode,
-				Message:   "VEHICLESETUPERROR: session reset, please retry",
-				Retryable: true,
-			}
+		if r.ErrorCode == API_ERRORS["API_ERROR_VEHICLE_SETUP"] {
+			return c.handleVehicleSetupError(&r, method, url, duration)
 		}
 
 		c.metrics.RecordRequest(method, url, duration, false)
 		c.isAlive = false
-
 		if r.ErrorCode != "" {
-			// Return a retryable API error since this could be a temporary issue
-			return nil, APIError{
-				Code:      r.ErrorCode,
-				Message:   fmt.Sprintf("API request failed: %s", r.ErrorCode),
-				Retryable: true,
-			}
+			return nil, APIError{Code: r.ErrorCode, Message: fmt.Sprintf("API request failed: %s", r.ErrorCode), Retryable: true}
 		}
-		return nil, APIError{
-			Code:      "API_SUCCESS_FALSE",
-			Message:   "API request failed with success=false",
-			Retryable: true,
-		}
+		return nil, APIError{Code: "API_SUCCESS_FALSE", Message: "API request failed with success=false", Retryable: true}
 	}
 
 	c.metrics.RecordRequest(method, url, duration, false)
 	c.isAlive = false
-
 	return nil, pkgerrors.Errorf("request failed with status %s", resp.Status())
 }
 
