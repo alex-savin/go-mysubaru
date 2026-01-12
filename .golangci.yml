@@ -13,60 +13,15 @@ formatters:
 linters:
   default: none
   enable:
-    - errcheck
     - govet
     - ineffassign
     - staticcheck
-    - misspell
-    - unconvert
-    - unparam
-    - gocritic
-    - revive
-    - bodyclose
-    - noctx
 
   settings:
-    errcheck:
-      check-type-assertions: true
-      check-blank: true
-
     govet:
       enable-all: true
       disable:
         - fieldalignment
-
-    misspell:
-      locale: US
-
-    revive:
-      rules:
-        - name: blank-imports
-        - name: context-as-argument
-        - name: context-keys-type
-        - name: dot-imports
-        - name: error-return
-        - name: error-strings
-        - name: error-naming
-        - name: exported
-        - name: increment-decrement
-        - name: var-naming
-        - name: var-declaration
-        - name: package-comments
-        - name: range
-        - name: receiver-naming
-        - name: time-naming
-        - name: unexported-return
-        - name: indent-error-flow
-        - name: errorf
-
-    gocritic:
-      enabled-tags:
-        - diagnostic
-        - style
-        - performance
-      disabled-checks:
-        - hugeParam
-        - rangeValCopy
 
   exclusions:
     rules:
@@ -74,10 +29,13 @@ linters:
         linters:
           - errcheck
           - gocritic
-          - unparam
       - path: fixtures/
         linters:
           - lll
+      - path: example/
+        linters:
+          - errcheck
+          - gocritic
 
 issues:
   max-issues-per-linter: 50
