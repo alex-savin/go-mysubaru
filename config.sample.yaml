@@ -1,0 +1,14 @@
+mysubaru:
+  credentials:
+    username: user@email.com
+    password: "Secr#TPassW0rd"
+    pin: "PIN"
+    deviceid: GENERATE-DEVICE-ID
+    devicename: Golang Integration
+  region: USA
+  auto_reconnect: true
+timezone: "America/New_York"
+logging:
+  level: INFO
+  output: JSON
+  source: false
