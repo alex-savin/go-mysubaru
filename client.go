@@ -494,6 +494,16 @@ func (c *Client) executeWithRetry(method string, url string, params map[string]s
 			break
 		}
 
+		// Handle InvalidToken by re-authenticating before retry
+		var apiErr APIError
+		if errors.As(err, &apiErr) && apiErr.Code == API_ERRORS["API_ERROR_INVALID_TOKEN"] {
+			c.logger.Info("InvalidToken error detected, attempting re-authentication before retry")
+			if !c.reauthenticateAndSelect() {
+				c.logger.Error("re-authentication failed during retry")
+				break
+			}
+		}
+
 		c.logger.Warn("request failed, will retry", "attempt", attempt+1, "maxRetries", maxRetries, "error", err.Error())
 	}
 
