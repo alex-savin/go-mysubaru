@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "favoritePOIs",
+  "data": [
+    {
+      "poiId": "poi-001",
+      "name": "Home",
+      "address": "123 Main St, New York, NY 10001",
+      "latitude": 40.7128,
+      "longitude": -74.0060,
+      "category": "HOME",
+      "phone": null
+    },
+    {
+      "poiId": "poi-002",
+      "name": "Work",
+      "address": "456 Broadway, New York, NY 10012",
+      "latitude": 40.7233,
+      "longitude": -73.9988,
+      "category": "WORK",
+      "phone": "212-555-1234"
+    }
+  ]
+}

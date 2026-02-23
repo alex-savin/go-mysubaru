@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "valetModeSettings",
+  "data": {
+    "valetModeEnabled": true,
+    "startTime": "08:00",
+    "endTime": "17:00",
+    "speedLimit": 65,
+    "speedLimitUnit": "MPH",
+    "geoFenceEnabled": true,
+    "geoFenceRadius": 5,
+    "geoFenceRadiusUnit": "MILES",
+    "geoFenceCenterLatitude": 40.7128,
+    "geoFenceCenterLongitude": -74.0060,
+    "notifyOnExit": true,
+    "notifyOnSpeedExceed": true
+  }
+}

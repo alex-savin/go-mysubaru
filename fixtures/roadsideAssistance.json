@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "roadsideAssistance",
+  "data": {
+    "phone": "1-800-261-2155",
+    "available": true,
+    "coverageActive": true,
+    "coverageExpiration": 1814400000000,
+    "services": [
+      "TOWING",
+      "FLAT_TIRE",
+      "LOCKOUT",
+      "FUEL_DELIVERY",
+      "BATTERY_JUMP"
+    ]
+  }
+}

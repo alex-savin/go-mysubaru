@@ -1,0 +1,39 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "trips",
+  "data": [
+    {
+      "tripId": "trip-001",
+      "startTime": 1751742945000,
+      "endTime": 1751746545000,
+      "startLatitude": 40.7128,
+      "startLongitude": -74.0060,
+      "endLatitude": 40.7589,
+      "endLongitude": -73.9851,
+      "distanceMiles": 12.5,
+      "distanceKilometers": 20.1,
+      "durationMinutes": 35,
+      "avgSpeedMph": 21.4,
+      "maxSpeedMph": 45.0,
+      "fuelUsedGallons": 0.8,
+      "tripType": "MANUAL"
+    },
+    {
+      "tripId": "trip-002",
+      "startTime": 1751656545000,
+      "endTime": 1751660145000,
+      "startLatitude": 40.7589,
+      "startLongitude": -73.9851,
+      "endLatitude": 40.7128,
+      "endLongitude": -74.0060,
+      "distanceMiles": 13.2,
+      "distanceKilometers": 21.2,
+      "durationMinutes": 42,
+      "avgSpeedMph": 18.9,
+      "maxSpeedMph": 55.0,
+      "fuelUsedGallons": 0.9,
+      "tripType": "MANUAL"
+    }
+  ]
+}

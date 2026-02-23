@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "speedFenceSettings",
+  "data": {
+    "enabled": true,
+    "speedLimit": 75,
+    "speedLimitUnit": "MPH",
+    "notifyOnExceed": true,
+    "schedule": {
+      "enabled": true,
+      "days": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+      "startTime": "00:00",
+      "endTime": "23:59"
+    }
+  }
+}

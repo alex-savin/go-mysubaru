@@ -354,3 +354,231 @@ func TestCustomTime2_MarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+// TestNegativeAckError tests the NegativeAckError type
+func TestNegativeAckError(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         NegativeAckError
+		wantMessage string
+	}{
+		{
+			name: "ACC is on error",
+			err: NegativeAckError{
+				Code:    "NegativeAcknowledge_AccIsOn",
+				Message: "Vehicle accessory is on",
+			},
+			wantMessage: "Vehicle rejected command [NegativeAcknowledge_AccIsOn]: Vehicle accessory is on",
+		},
+		{
+			name: "Door not closed error",
+			err: NegativeAckError{
+				Code:    "NegativeAcknowledge_DoorNotClosed",
+				Message: "Door is not closed",
+			},
+			wantMessage: "Vehicle rejected command [NegativeAcknowledge_DoorNotClosed]: Door is not closed",
+		},
+		{
+			name: "Engine running error",
+			err: NegativeAckError{
+				Code:    "NegativeAcknowledge_EngineRunning",
+				Message: "Engine is running",
+			},
+			wantMessage: "Vehicle rejected command [NegativeAcknowledge_EngineRunning]: Engine is running",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.err.Error(); got != tt.wantMessage {
+				t.Errorf("NegativeAckError.Error() = %v, want %v", got, tt.wantMessage)
+			}
+		})
+	}
+}
+
+// TestPINLockedError tests the PINLockedError type
+func TestPINLockedError(t *testing.T) {
+	tests := []struct {
+		name           string
+		err            PINLockedError
+		wantMessage    string
+		wantMinutes    int
+	}{
+		{
+			name: "15 minute lockout",
+			err: PINLockedError{
+				MinutesRemaining: 15,
+			},
+			wantMessage: "PIN is locked. Try again in 15 minutes",
+			wantMinutes: 15,
+		},
+		{
+			name: "60 minute lockout",
+			err: PINLockedError{
+				MinutesRemaining: 60,
+			},
+			wantMessage: "PIN is locked. Try again in 60 minutes",
+			wantMinutes: 60,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.err.Error(); got != tt.wantMessage {
+				t.Errorf("PINLockedError.Error() = %v, want %v", got, tt.wantMessage)
+			}
+			if tt.err.MinutesRemaining != tt.wantMinutes {
+				t.Errorf("PINLockedError.MinutesRemaining = %v, want %v", tt.err.MinutesRemaining, tt.wantMinutes)
+			}
+		})
+	}
+}
+
+// TestIsNegativeAckError tests the IsNegativeAckError helper function
+func TestIsNegativeAckError(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		want   bool
+	}{
+		{
+			name: "NegativeAckError returns true",
+			err: NegativeAckError{
+				Code:    "NegativeAcknowledge_AccIsOn",
+				Message: "ACC is on",
+			},
+			want: true,
+		},
+		{
+			name: "regular error returns false",
+			err:  ErrInvalidSession,
+			want: false,
+		},
+		{
+			name: "nil error returns false",
+			err:  nil,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsNegativeAckError(tt.err); got != tt.want {
+				t.Errorf("IsNegativeAckError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsPINLockedError tests the IsPINLockedError helper function
+func TestIsPINLockedError(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		want   bool
+	}{
+		{
+			name:   "PINLockedError returns true",
+			err:    PINLockedError{MinutesRemaining: 15},
+			want:   true,
+		},
+		{
+			name: "NegativeAckError returns false",
+			err: NegativeAckError{
+				Code:    "NegativeAcknowledge_AccIsOn",
+				Message: "ACC is on",
+			},
+			want: false,
+		},
+		{
+			name: "regular error returns false",
+			err:  ErrInvalidSession,
+			want: false,
+		},
+		{
+			name: "nil error returns false",
+			err:  nil,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsPINLockedError(tt.err); got != tt.want {
+				t.Errorf("IsPINLockedError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseAPIError tests the ParseAPIError function
+func TestParseAPIError(t *testing.T) {
+	tests := []struct {
+		name      string
+		errorCode string
+		wantNil   bool
+		isNegAck  bool
+	}{
+		{
+			name:      "invalid session error",
+			errorCode: "INVALID_SESSION",
+			wantNil:   false,
+			isNegAck:  false,
+		},
+		{
+			name:      "no vehicles error",
+			errorCode: "noVehiclesOnAccount",
+			wantNil:   false,
+			isNegAck:  false,
+		},
+		{
+			name:      "invalid credentials",
+			errorCode: "invalidCredentials",
+			wantNil:   false,
+			isNegAck:  false,
+		},
+		{
+			name:      "NegativeAcknowledge_accIsOn",
+			errorCode: "NegativeAcknowledge_accIsOn",
+			wantNil:   false,
+			isNegAck:  true,
+		},
+		{
+			name:      "NegativeAcknowledge_doorNotClosed",
+			errorCode: "NegativeAcknowledge_doorNotClosed",
+			wantNil:   false,
+			isNegAck:  true,
+		},
+		{
+			name:      "unknown error code returns generic error",
+			errorCode: "someUnknownError",
+			wantNil:   false, // ParseAPIError returns a generic error for unknown codes
+			isNegAck:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseAPIError(tt.errorCode)
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("ParseAPIError() = %v, want nil", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Errorf("ParseAPIError() = nil, want non-nil error")
+				return
+			}
+			// Check if it's correctly identified as NegativeAckError
+			if tt.isNegAck && !IsNegativeAckError(got) {
+				t.Errorf("expected ParseAPIError(%s) to return NegativeAckError", tt.errorCode)
+			}
+			if !tt.isNegAck && IsNegativeAckError(got) {
+				t.Errorf("expected ParseAPIError(%s) to NOT return NegativeAckError", tt.errorCode)
+			}
+		})
+	}
+}
+

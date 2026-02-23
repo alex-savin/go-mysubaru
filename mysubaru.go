@@ -24,14 +24,61 @@ func (e APIError) IsRetryable() bool {
 	return e.Retryable
 }
 
+// NegativeAckError represents a vehicle-side rejection of a remote command
+type NegativeAckError struct {
+	Code    string
+	Message string
+}
+
+func (e NegativeAckError) Error() string {
+	return fmt.Sprintf("Vehicle rejected command [%s]: %s", e.Code, e.Message)
+}
+
+// PINLockedError represents a PIN locked error with timeout information
+type PINLockedError struct {
+	MinutesRemaining int
+}
+
+func (e PINLockedError) Error() string {
+	return fmt.Sprintf("PIN is locked. Try again in %d minutes", e.MinutesRemaining)
+}
+
 // Common API errors
 var (
 	ErrInvalidCredentials   = APIError{Code: "INVALID_CREDENTIALS", Message: "Invalid username or password", Retryable: false}
 	ErrAccountLocked        = APIError{Code: "ACCOUNT_LOCKED", Message: "Account is locked", Retryable: false}
 	ErrSessionExpired       = APIError{Code: "SESSION_EXPIRED", Message: "Session has expired", Retryable: true}
+	ErrInvalidSession       = APIError{Code: "INVALID_SESSION", Message: "Session is invalid", Retryable: true}
 	ErrRateLimited          = APIError{Code: "RATE_LIMITED", Message: "Too many requests", Retryable: true}
 	ErrNetworkError         = APIError{Code: "NETWORK_ERROR", Message: "Network communication failed", Retryable: true}
 	ErrSubscriptionRequired = APIError{Code: "SUBSCRIPTION_REQUIRED", Message: "Required subscription not active", Retryable: false}
+	ErrNoVehicles           = APIError{Code: "NO_VEHICLES", Message: "No vehicles found on account", Retryable: false}
+	ErrVehicleNotInAccount  = APIError{Code: "VEHICLE_NOT_IN_ACCOUNT", Message: "Vehicle not associated with account", Retryable: false}
+	ErrStolenVehicle        = APIError{Code: "STOLEN_VEHICLE", Message: "Vehicle is reported as stolen", Retryable: false}
+	ErrInvalidPIN           = APIError{Code: "INVALID_PIN", Message: "Invalid PIN code", Retryable: false}
+	ErrServiceInProgress    = APIError{Code: "SERVICE_IN_PROGRESS", Message: "Another service request is already in progress", Retryable: true}
+	ErrTokenGenFailed       = APIError{Code: "TOKEN_GEN_FAILED", Message: "JWT token generation failed", Retryable: true}
+)
+
+// Negative acknowledgement errors (vehicle-side rejections)
+var (
+	ErrAccIsOn             = NegativeAckError{Code: "ACC_IS_ON", Message: "Vehicle is in accessory mode"}
+	ErrDoorNotClosed       = NegativeAckError{Code: "DOOR_NOT_CLOSED", Message: "A door is not closed"}
+	ErrDoorAjar            = NegativeAckError{Code: "DOOR_AJAR", Message: "Door ajar - remote start blocked"}
+	ErrEngineHoodOpen      = NegativeAckError{Code: "ENGINE_HOOD_OPEN", Message: "Engine hood is open"}
+	ErrFuelLevelLow        = NegativeAckError{Code: "FUEL_LEVEL_LOW", Message: "Fuel level is too low"}
+	ErrIgnitionOn          = NegativeAckError{Code: "IGNITION_ON", Message: "Ignition is on"}
+	ErrKeyInIgnition       = NegativeAckError{Code: "KEY_IN_IGNITION", Message: "Key is in ignition"}
+	ErrMaxRESExceeded      = NegativeAckError{Code: "MAX_RES_EXCEEDED", Message: "Maximum remote engine start time (20 min) exceeded"}
+	ErrMFDInUse            = NegativeAckError{Code: "MFD_IN_USE", Message: "Multifunction display is in use"}
+	ErrNoSlotsLeft         = NegativeAckError{Code: "NO_SLOTS_LEFT", Message: "PHEV charge schedule is full"}
+	ErrOtherCommandOngoing = NegativeAckError{Code: "OTHER_COMMAND_ONGOING", Message: "Another command is already in progress"}
+	ErrPINNotSetInHU       = NegativeAckError{Code: "PIN_NOT_SET_IN_HU", Message: "Valet PIN not set in vehicle head unit"}
+	ErrBackupBattery       = NegativeAckError{Code: "BACKUP_BATTERY", Message: "Vehicle is running on backup battery"}
+	ErrSecurityAlarmOn     = NegativeAckError{Code: "SECURITY_ALARM_ON", Message: "Security alarm is active"}
+	ErrVehicleNotStationary = NegativeAckError{Code: "VEHICLE_NOT_STATIONARY", Message: "Vehicle is in motion"}
+	ErrNotPluggedIn        = NegativeAckError{Code: "NOT_PLUGGED_IN", Message: "PHEV is not plugged in"}
+	ErrDeviceNotAuth       = NegativeAckError{Code: "DEVICE_NOT_AUTH", Message: "Device not authenticated for remote services"}
 )
 
 // IsRetryableError checks if an error is retryable
@@ -41,6 +88,94 @@ func IsRetryableError(err error) bool {
 		return apiErr.IsRetryable()
 	}
 	return false
+}
+
+// IsNegativeAckError checks if an error is a vehicle-side negative acknowledgement
+func IsNegativeAckError(err error) bool {
+	var nackErr NegativeAckError
+	return errors.As(err, &nackErr)
+}
+
+// IsPINLockedError checks if an error is a PIN locked error
+func IsPINLockedError(err error) bool {
+	var pinErr PINLockedError
+	return errors.As(err, &pinErr)
+}
+
+// ParseAPIError converts an error code string to the appropriate error type
+func ParseAPIError(errorCode string) error {
+	switch errorCode {
+	// Session/Authentication errors
+	case API_ERRORS["API_ERROR_INVALID_CREDENTIALS"]:
+		return ErrInvalidCredentials
+	case API_ERRORS["API_ERROR_ACCOUNT_LOCKED"]:
+		return ErrAccountLocked
+	case API_ERRORS["API_ERROR_INVALID_SESSION"]:
+		return ErrInvalidSession
+	case API_ERRORS["API_ERROR_NO_SESSION_ID"]:
+		return ErrSessionExpired
+	case API_ERRORS["API_ERROR_TOKEN_GENERATION_FAILED"]:
+		return ErrTokenGenFailed
+	case API_ERRORS["API_ERROR_TOO_MANY_ATTEMPTS"]:
+		return ErrRateLimited
+
+	// Vehicle errors
+	case API_ERRORS["API_ERROR_NO_VEHICLES"]:
+		return ErrNoVehicles
+	case API_ERRORS["API_ERROR_VEHICLE_NOT_IN_ACCOUNT"]:
+		return ErrVehicleNotInAccount
+	case API_ERRORS["API_ERROR_SERVICE_ALREADY_STARTED"], API_ERRORS["API_ERROR_G1_SERVICE_ALREADY_STARTED"]:
+		return ErrServiceInProgress
+
+	// G1 SXM errors
+	case API_ERRORS["API_ERROR_G1_NO_SUBSCRIPTION"]:
+		return ErrSubscriptionRequired
+	case API_ERRORS["API_ERROR_G1_STOLEN_VEHICLE"]:
+		return ErrStolenVehicle
+	case API_ERRORS["API_ERROR_G1_INVALID_PIN"]:
+		return ErrInvalidPIN
+	case API_ERRORS["API_ERROR_G1_PIN_LOCKED"]:
+		return PINLockedError{MinutesRemaining: 30} // Default, actual time may be in response
+
+	// Negative acknowledgement errors
+	case API_ERRORS["NACK_ACC_IS_ON"]:
+		return ErrAccIsOn
+	case API_ERRORS["NACK_DOOR_NOT_CLOSED"]:
+		return ErrDoorNotClosed
+	case API_ERRORS["NACK_DOOR_AJAR"]:
+		return ErrDoorAjar
+	case API_ERRORS["NACK_ENGINE_HOOD_NOT_CLOSED"]:
+		return ErrEngineHoodOpen
+	case API_ERRORS["NACK_FUEL_LEVEL_TOO_LOW"]:
+		return ErrFuelLevelLow
+	case API_ERRORS["NACK_IGNITION_IS_ON"]:
+		return ErrIgnitionOn
+	case API_ERRORS["NACK_KEY_IN_IGNITION"]:
+		return ErrKeyInIgnition
+	case API_ERRORS["NACK_MAX_RES_EXCEEDED"]:
+		return ErrMaxRESExceeded
+	case API_ERRORS["NACK_MFD_IN_USE"]:
+		return ErrMFDInUse
+	case API_ERRORS["NACK_NO_SLOTS_LEFT"]:
+		return ErrNoSlotsLeft
+	case API_ERRORS["NACK_OTHER_COMMANDS_ONGOING"]:
+		return ErrOtherCommandOngoing
+	case API_ERRORS["NACK_PIN_NOT_SET_IN_HEAD_UNIT"]:
+		return ErrPINNotSetInHU
+	case API_ERRORS["NACK_RUNNING_ON_BACKUP_BATTERY"]:
+		return ErrBackupBattery
+	case API_ERRORS["NACK_SECURITY_ALARM_ON"]:
+		return ErrSecurityAlarmOn
+	case API_ERRORS["NACK_VEHICLE_NOT_STATIONARY"]:
+		return ErrVehicleNotStationary
+	case API_ERRORS["NACK_VEHICLE_NOT_PLUGGED_IN"]:
+		return ErrNotPluggedIn
+	case API_ERRORS["NACK_DEVICE_NOT_AUTHENTICATED"]:
+		return ErrDeviceNotAuth
+
+	default:
+		return APIError{Code: errorCode, Message: "Unknown API error: " + errorCode, Retryable: false}
+	}
 }
 
 // Response represents the structure of a response from the MySubaru API.
@@ -66,12 +201,34 @@ var apiErrorMessages = map[string]string{
 	"API_ERROR_VEHICLE_NOT_IN_ACCOUNT":  "Vehicle not in account",
 	"API_ERROR_SERVICE_ALREADY_STARTED": "Service already started",
 	"API_ERROR_SOA_403":                 "Unable to parse response body, SOA 403 error",
+	"API_ERROR_SOA_404":                 "Unable to parse response body, SOA 404 error",
+	"API_ERROR_INVALID_SESSION":         "Session is invalid or expired",
+	"API_ERROR_NO_SESSION_ID":           "No session ID found",
+	"API_ERROR_TOKEN_GENERATION_FAILED": "JWT token generation failed",
 	// G1 API errors
 	"API_ERROR_G1_NO_SUBSCRIPTION":         "No subscription found for the vehicle",
 	"API_ERROR_G1_STOLEN_VEHICLE":          "Car is reported as stolen",
 	"API_ERROR_G1_INVALID_PIN":             "Invalid PIN",
-	"API_ERROR_G1_PIN_LOCKED":              "PIN is locked",
+	"API_ERROR_G1_PIN_LOCKED":              "PIN is locked - try again later",
 	"API_ERROR_G1_SERVICE_ALREADY_STARTED": "Service already started",
+	// Negative acknowledgement errors
+	"NACK_ACC_IS_ON":                 "Vehicle is in accessory mode",
+	"NACK_DOOR_NOT_CLOSED":           "A door is not closed",
+	"NACK_ENGINE_HOOD_NOT_CLOSED":    "Engine hood is open",
+	"NACK_FUEL_LEVEL_TOO_LOW":        "Fuel level is too low",
+	"NACK_IGNITION_IS_ON":            "Ignition is on",
+	"NACK_KEY_IN_IGNITION":           "Key is in ignition",
+	"NACK_MAX_RES_EXCEEDED":          "Maximum remote engine start time (20 min) exceeded",
+	"NACK_MFD_IN_USE":                "Multifunction display is in use",
+	"NACK_NO_SLOTS_LEFT":             "PHEV charge schedule is full",
+	"NACK_OTHER_COMMANDS_ONGOING":    "Another command is already in progress",
+	"NACK_PIN_NOT_SET_IN_HEAD_UNIT":  "Valet PIN not set in vehicle head unit",
+	"NACK_RUNNING_ON_BACKUP_BATTERY": "Vehicle is running on backup battery",
+	"NACK_SECURITY_ALARM_ON":         "Security alarm is active",
+	"NACK_VEHICLE_NOT_STATIONARY":    "Vehicle is in motion",
+	"NACK_VEHICLE_NOT_PLUGGED_IN":    "PHEV is not plugged in",
+	"NACK_DOOR_AJAR":                 "Door ajar - remote start blocked",
+	"NACK_DEVICE_NOT_AUTHENTICATED":  "Device not authenticated for remote services",
 }
 
 // parse parses the JSON response from the MySubaru API into a Response struct.

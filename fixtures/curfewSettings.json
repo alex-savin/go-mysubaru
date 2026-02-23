@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "curfewSettings",
+  "data": {
+    "enabled": true,
+    "name": "Night Curfew",
+    "days": ["SUN", "MON", "TUE", "WED", "THU"],
+    "startTime": "22:00",
+    "endTime": "06:00",
+    "notifyOnViolation": true
+  }
+}

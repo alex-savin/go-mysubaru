@@ -4,7 +4,7 @@
 package mysubaru
 
 // API Configuration
-var MOBILE_API_VERSION = "/g2v31"
+var MOBILE_API_VERSION = "/g2v32"
 
 var MOBILE_API_SERVER = map[string]string{
 	"USA":  "https://mobileapi.prod.subarucs.com",
@@ -94,12 +94,145 @@ var apiURLs = map[string]string{
 	"API_EV_FETCH_CHARGE_SETTINGS":  "/service/g2/phevGetTimerSettings/execute.json",
 	"API_EV_SAVE_CHARGE_SETTINGS":   "/service/g2/phevSendTimerSetting/execute.json",
 	"API_EV_DELETE_CHARGE_SCHEDULE": "/service/g2/phevDeleteTimerSetting/execute.json",
+	"API_EV_RETRIEVE_TIMER":         "/service/g2/phevRetrieveTimerSettings/execute.json",
+	"API_EV_CONDITION":              "/service/g2/condition/execute.json",
+
+	// Valet mode endpoints
+	"API_G2_VALET_MODE":               "/service/g2/valetMode/execute.json",
+	"API_G2_VALET_SETTINGS_FETCH":     "/service/g2/getValetCustomSettings/fetch.json",
+	"API_G2_VALET_SETUP_FETCH":        "/service/g2/valetCustomSettings/fetch.json",
+	"API_G2_VALET_SETTINGS_SAVE":      "/service/g2/saveValetCustomSettings/execute.json",
+	"API_G2_VALET_PIN_RESET":          "/service/g2/valetInvehiclePinReset/execute.json",
+	"API_VEHICLE_VALET_STATUS":        "/vehicle/valet/status.json",
+
+	// Alert endpoints (geo-fence, speed-fence, curfew)
+	"API_G2_GEOFENCE_FETCH":     "/service/g2/geoFence/fetch.json",
+	"API_G2_GEOFENCE_SAVE":      "/service/g2/geoFence/save.json",
+	"API_G2_GEOFENCE_STATUS":    "/service/g2/geoFence/status.json",
+	"API_G2_SPEEDFENCE_FETCH":   "/service/g2/speedFence/fetch.json",
+	"API_G2_SPEEDFENCE_SAVE":    "/service/g2/speedFence/save.json",
+	"API_G2_SPEEDFENCE_STATUS":  "/service/g2/speedFence/status.json",
+	"API_G2_CURFEW_FETCH":       "/service/g2/curfew/fetch.json",
+	"API_G2_CURFEW_SAVE":        "/service/g2/curfew/save.json",
+	"API_G2_CURFEW_STATUS":      "/service/g2/timeFence/status.json",
+
+	// Trip tracker / Driving journal endpoints
+	"API_TRIPS_DISPLAY":               "/display/trips.json",
+	"API_TRIP_DATA_RETRIEVE":          "/retrieve/triplogData.json",
+	"API_TRIP_POSITION_DATA":          "/retrieve/positionData.json",
+	"API_TRIP_DELETE":                 "/delete/triplog.json",
+	"API_TRIP_EXPIRATION_GET":         "/retrieve/tripExpirationDate.json",
+	"API_TRIP_EXPIRATION_SAVE":        "/save/tripExpirationDate.json",
+	"API_G2_TRIPLOG_COMMAND":          "/service/g2/triplogCommand/execute.json",
+	"API_JOURNAL_CREATE":              "/create/journal.json",
+	"API_JOURNAL_UPDATE":              "/update/journal.json",
+	"API_JOURNAL_RETRIEVE":            "/retrieve/journal.json",
+	"API_JOURNALS_RETRIEVE_ALL":       "/retrieveAll/journals.json",
+	"API_JOURNAL_DELETE":              "/delete/journal.json",
+	"API_JOURNALS_DELETE_ALL":         "/deleteAll/journals.json",
+	"API_JOURNAL_ENTRIES_ADD":         "/add/journalEntries.json",
+	"API_JOURNAL_ENTRY_UPDATE":        "/update/journalEntry.json",
+	"API_JOURNAL_ENTRIES_DELETE":      "/delete/journalEntries.json",
+
+	// POI / Destinations endpoints
+	"API_POI_CREATE":              "/create/poi.json",
+	"API_POI_FAVORITE_RETRIEVE":   "/retrieve/favorite/pois.json",
+	"API_POI_WORK_HOME_SAVE":      "/save/work-home/poi.json",
+	"API_POI_UPDATE":              "/update/poi.json",
+	"API_POI_FAVORITE_DELETE":     "/delete/favorite/poi.json",
+	"API_POI_FAVORITE_DELETE_ALL": "/deleteAll/favorite/pois.json",
+	"API_G2_SEND_POI_STATUS":      "/service/g2/sendPoi/status.json",
+
+	// Roadside assistance endpoints
+	"API_ROADSIDE_ASSISTANCE":         "/roadsideAssistance.json",
+	"API_ROADSIDE_ASSISTANCE_REQUEST": "/roadsideAssistanceRequest.json",
+	"API_ROADSIDE_ASSISTANCE_DETAIL":  "/roadsideAssistanceDetail.json",
+
+	// Notification preferences endpoints
+	"API_NOTIFICATION_PREFS":      "/notificationPreferences.json",
+	"API_NOTIFICATION_PREFS_GEN2": "/notificationPreferencesGen2.json",
+
+	// Maintenance and service endpoints
+	"API_MAINTENANCE_SCHEDULE":           "/maintenanceSchedule.json",
+	"API_MAINTENANCE_SCHEDULE_INTERVALS": "/maintenanceScheduleIntervals.json",
+	"API_CHANGE_PLAN_SEVERITY":           "/changePlanSeverity.json",
+	"API_SERVICE_HISTORY":                "/serviceHistory.json",
+	"API_SERVICE_UPDATE_USER":            "/updateServiceUser.json",
+	"API_SERVICE_UPDATE_DEALER":          "/updateServiceDealer.json",
+	"API_SERVICE_REMOVE":                 "/removeService.json",
+	"API_SERVICE_ADD_ENTRY":              "/addServiceEntry.json",
+
+	// Dealer endpoints
+	"API_PREFERRED_DEALER":         "/preferredDealer.json",
+	"API_NEAREST_DEALER":           "/nearestDealer.json",
+	"API_ASSIGN_PREFERRED_DEALER":  "/assignAsPreferredDealer.json",
+	"API_DEALER_INFO":              "/dealerInfo.json",
+	"API_DEALER_AMENITIES":         "/dealerAmenities.json",
+	"API_DEALER_SERVICES":          "/dealerServices.json",
+
+	// Appointment endpoints
+	"API_APPOINTMENT_FINDER":  "/appointmentFinder.json",
+	"API_APPOINTMENT_CONFIRM": "/confirmAppointment.json",
+	"API_APPOINTMENT_BY_VIN":  "/appointmentByVin.json",
+	"API_APPOINTMENT_CANCEL":  "/cancelAppointment.json",
+
+	// Recalls and warnings
+	"API_RECALLS":         "/recalls.json",
+	"API_RECALLS_BY_VIN":  "/recallsByVin.json",
+	"API_WARNING_LIGHTS":  "/warninglights.json",
+	"API_OTA_CAMPAIGNS":   "/otaCampaigns.json",
+
+	// Events and coupons
+	"API_EVENTS":  "/events.json",
+	"API_COUPONS": "/coupons.json",
+
+	// Usage reports
+	"API_USAGE_REPORT":       "/usageReport.json",
+	"API_USAGE_REPORT_USERS": "/usageReport/users.json",
+
+	// Profile endpoints
+	"API_CUSTOMER_PROFILE":        "/profile/customerProfile.json",
+	"API_UPDATE_ACCOUNT":          "/profile/updateAccount.json",
+	"API_CHANGE_PASSWORD":         "/profile/changePassword.json",
+	"API_SET_PIN":                 "/profile/remoteServices/setPin.json",
+	"API_ENCRYPT_PIN":             "/profile/encryptPin.json",
+	"API_TEXT_OPT_OUT":            "/profile/textOptOut.json",
+	"API_LANGUAGE_PREFS":          "/profile/languagePreferences.json",
+	"API_MOBILE_PHONE_INITIATE":   "/profile/mobilePhoneChange/initiate.json",
+	"API_MOBILE_PHONE_VERIFY":     "/profile/mobilePhoneChange/verify.json",
+	"API_EMERGENCY_CONTACTS":      "/profile/emergencyContacts.json",
+	"API_EMERGENCY_CONTACT_SAVE":  "/profile/saveEmergencyContact.json",
+	"API_EMERGENCY_CONTACT_DELETE": "/profile/deleteEmergencyContact.json",
+
+	// Authorized users endpoints
+	"API_AUTHORIZED_USERS":          "/authorized/authorizedUsers.json",
+	"API_AUTHORIZED_USER_EDIT":      "/authorized/editAuthorizedUser.json",
+	"API_AUTHORIZED_USER_SAVE":      "/authorized/createOrSaveAuthorizedUser.json",
+	"API_AUTHORIZED_USER_DELETE":    "/authorized/deleteAuthorizedUser.json",
+	"API_AUTHORIZED_USER_VALIDATE":  "/authorized/validateAuthorizedUserAccess.json",
+
+	// JWT token endpoint
+	"API_GENERATE_TOKEN": "/generateToken.json",
+
+	// Additional vehicle endpoints
+	"API_VEHICLE_INFO":                "/vehicleInfo.json",
+	"API_SIEBEL_PROFILE_EXISTS":       "/isSiebelProfileExists.json",
+	"API_SAS_INFO":                    "/sasInfo.json",
+	"API_FETCH_VEHICLES":              "/fetchVehicles.json",
+	"API_UPDATE_VEHICLE":              "/updateVehicle.json",
+	"API_ADD_VEHICLE":                 "/addVehicle.json",
+	"API_VIN_VERIFY":                  "/vinVerify.json",
+	"API_UPDATE_MILEAGE":              "/updateApiMileage.json",
+	"API_GET_ESTIMATED_MILEAGE":       "/getApiEstimatedMileage.json",
+	"API_G2_VEHICLE_STATUS_REFRESH":   "/service/g2/vehicleStatusRefresh/execute.json",
+	"API_G2_VEHICLE_CONDITION_STATUS": "/service/g2/vehicleCondition/status.json",
 }
 
 // Error codes and messages
 var API_ERRORS = map[string]string{
 	// G2 API errors
 	"API_ERROR_SOA_403":                 "403-soa-unableToParseResponseBody",
+	"API_ERROR_SOA_404":                 "404-soa-unableToParseResponseBody",
 	"API_ERROR_NO_ACCOUNT":              "accountNotFound",
 	"API_ERROR_INVALID_ACCOUNT":         "invalidAccount",
 	"API_ERROR_INVALID_CREDENTIALS":     "InvalidCredentials",
@@ -111,13 +244,35 @@ var API_ERRORS = map[string]string{
 	"API_ERROR_VEHICLE_SETUP":           "VEHICLESETUPERROR",
 	"API_ERROR_VEHICLE_NOT_IN_ACCOUNT":  "vehicleNotInAccount",
 	"API_ERROR_SERVICE_ALREADY_STARTED": "ServiceAlreadyStarted",
+	"API_ERROR_INVALID_SESSION":         "INVALID_SESSION",
+	"API_ERROR_NO_SESSION_ID":           "EWC_NoSessionId",
+	"API_ERROR_TOKEN_GENERATION_FAILED": "EWC_TokenGenerationFailed",
 
-	// G1 API errors
+	// G1 API errors (SXM prefix)
 	"API_ERROR_G1_NO_SUBSCRIPTION":         "SXM40004",
 	"API_ERROR_G1_STOLEN_VEHICLE":          "SXM40005",
 	"API_ERROR_G1_INVALID_PIN":             "SXM40006",
 	"API_ERROR_G1_SERVICE_ALREADY_STARTED": "SXM40009",
 	"API_ERROR_G1_PIN_LOCKED":              "SXM40017",
+
+	// Negative Acknowledgement errors (vehicle-side rejections)
+	"NACK_ACC_IS_ON":                 "NegativeAcknowledge_accIsOn",
+	"NACK_DOOR_NOT_CLOSED":           "NegativeAcknowledge_doorNotClosed",
+	"NACK_ENGINE_HOOD_NOT_CLOSED":    "NegativeAcknowledge_engineHoodNotClosed",
+	"NACK_FUEL_LEVEL_TOO_LOW":        "NegativeAcknowledge_fuelLevelTooLow",
+	"NACK_IGNITION_IS_ON":            "NegativeAcknowledge_ignitionIsOn",
+	"NACK_KEY_IN_IGNITION":           "NegativeAcknowledge_keyInIgnition",
+	"NACK_MAX_RES_EXCEEDED":          "NegativeAcknowledge_maxNumRemoteEngineStartExceeded",
+	"NACK_MFD_IN_USE":                "NegativeAcknowledge_mfdInUse",
+	"NACK_NO_SLOTS_LEFT":             "NegativeAcknowledge_noSlotsLeft",
+	"NACK_OTHER_COMMANDS_ONGOING":    "NegativeAcknowledge_otherCommandsOngoing",
+	"NACK_PIN_NOT_SET_IN_HEAD_UNIT":  "NegativeAcknowledge_pinNotSetInHeadUnit",
+	"NACK_RUNNING_ON_BACKUP_BATTERY": "NegativeAcknowledge_runningOnBackupBattery",
+	"NACK_SECURITY_ALARM_ON":         "NegativeAcknowledge_securityAlarmOn",
+	"NACK_VEHICLE_NOT_STATIONARY":    "NegativeAcknowledge_vehicleNotStationary",
+	"NACK_VEHICLE_NOT_PLUGGED_IN":    "NegativeAcknowledge_vehicleIsNotPluggedin",
+	"NACK_DOOR_AJAR":                 "DOOR_AJAR",
+	"NACK_DEVICE_NOT_AUTHENTICATED":  "DEVICE_NOT_AUTHENTICATED",
 }
 
 var APP_ERRORS = map[string]string{

@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "remoteServiceStatus",
+  "data": {
+    "serviceRequestId": "SVC-12345678",
+    "result": "SUCCESS",
+    "subState": "COMPLETED",
+    "cancelled": false,
+    "remoteServiceState": "FINISHED",
+    "remoteServiceType": "LOCK",
+    "updateTime": 1751742945000
+  }
+}

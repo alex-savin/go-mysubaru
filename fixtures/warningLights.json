@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "warningLights",
+  "data": [
+    {
+      "code": "TPMS_MIL",
+      "name": "Tire Pressure",
+      "description": "Low tire pressure detected",
+      "severity": "WARNING",
+      "active": true
+    }
+  ]
+}

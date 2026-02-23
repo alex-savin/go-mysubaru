@@ -1984,3 +1984,769 @@ func DetectModelFromCode(modelCode string) (model string, trim string) {
 func (v *Vehicle) GetModelInfo() (model string, trim string) {
 	return DetectModelFromCode(v.ModelCode)
 }
+
+// =============================================================================
+// Valet Mode
+// =============================================================================
+
+// ValetModeSettings represents the valet mode configuration
+type ValetModeSettings struct {
+	Enabled      bool   `json:"enabled"`
+	SpeedLimit   int    `json:"speedLimit,omitempty"`
+	SpeedUnit    string `json:"speedUnit,omitempty"` // MPH or KPH
+	GeoFenceOn   bool   `json:"geoFenceOn,omitempty"`
+	GeoFenceLat  float64 `json:"geoFenceLat,omitempty"`
+	GeoFenceLng  float64 `json:"geoFenceLng,omitempty"`
+	GeoFenceRadius int  `json:"geoFenceRadius,omitempty"`
+}
+
+// GetValetModeStatus retrieves the current valet mode status
+func (v *Vehicle) GetValetModeStatus() (*ValetModeSettings, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_VEHICLE_VALET_STATUS"]
+	resp, err := v.client.execute(GET, reqUrl, map[string]string{"vin": v.Vin}, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetValetModeStatus request", "error", err.Error())
+		return nil, err
+	}
+
+	var settings ValetModeSettings
+	if err := json.Unmarshal(resp.Data, &settings); err != nil {
+		v.client.logger.Error("error parsing valet mode status", "error", err.Error())
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+// GetValetModeSettings retrieves the valet mode custom settings
+func (v *Vehicle) GetValetModeSettings() (*ValetModeSettings, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_SETTINGS_FETCH"]
+	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetValetModeSettings request", "error", err.Error())
+		return nil, err
+	}
+
+	var settings ValetModeSettings
+	if err := json.Unmarshal(resp.Data, &settings); err != nil {
+		v.client.logger.Error("error parsing valet mode settings", "error", err.Error())
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+// ValetModeStart enables valet mode on the vehicle
+func (v *Vehicle) ValetModeStart() (chan string, error) {
+	params := map[string]string{
+		"delay": "0",
+		"vin":   v.Vin,
+		"pin":   v.client.credentials.PIN,
+		"action": "start",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_MODE"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// ValetModeStop disables valet mode on the vehicle
+func (v *Vehicle) ValetModeStop() (chan string, error) {
+	params := map[string]string{
+		"delay": "0",
+		"vin":   v.Vin,
+		"pin":   v.client.credentials.PIN,
+		"action": "stop",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_MODE"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// SaveValetModeSettings saves custom valet mode settings
+func (v *Vehicle) SaveValetModeSettings(settings ValetModeSettings) (chan string, error) {
+	params := map[string]string{
+		"vin":          v.Vin,
+		"pin":          v.client.credentials.PIN,
+		"speedLimit":   strconv.Itoa(settings.SpeedLimit),
+		"speedUnit":    settings.SpeedUnit,
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_SETTINGS_SAVE"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// =============================================================================
+// Geo-Fence (Boundary Alerts)
+// =============================================================================
+
+// GeoFenceSettings represents a boundary alert configuration
+type GeoFenceSettings struct {
+	Enabled    bool    `json:"enabled"`
+	Name       string  `json:"name,omitempty"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	Radius     int     `json:"radius"` // in meters
+	AlertOnExit bool   `json:"alertOnExit"`
+	AlertOnEntry bool  `json:"alertOnEntry"`
+}
+
+// GetGeoFenceSettings retrieves the current geo-fence (boundary alert) settings
+func (v *Vehicle) GetGeoFenceSettings() (*GeoFenceSettings, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE_FETCH"]
+	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetGeoFenceSettings request", "error", err.Error())
+		return nil, err
+	}
+
+	var settings GeoFenceSettings
+	if err := json.Unmarshal(resp.Data, &settings); err != nil {
+		v.client.logger.Error("error parsing geo-fence settings", "error", err.Error())
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+// SaveGeoFenceSettings saves geo-fence (boundary alert) settings
+func (v *Vehicle) SaveGeoFenceSettings(settings GeoFenceSettings) error {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{
+		"vin":          v.Vin,
+		"latitude":     fmt.Sprintf("%f", settings.Latitude),
+		"longitude":    fmt.Sprintf("%f", settings.Longitude),
+		"radius":       strconv.Itoa(settings.Radius),
+		"alertOnExit":  strconv.FormatBool(settings.AlertOnExit),
+		"alertOnEntry": strconv.FormatBool(settings.AlertOnEntry),
+		"enabled":      strconv.FormatBool(settings.Enabled),
+	}
+	if settings.Name != "" {
+		params["name"] = settings.Name
+	}
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE_SAVE"]
+	_, err := v.client.execute(POST, reqUrl, params, true)
+	if err != nil {
+		v.client.logger.Error("error saving geo-fence settings", "error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// ActivateGeoFence activates the geo-fence alert on the vehicle
+func (v *Vehicle) ActivateGeoFence() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "activate",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// DeactivateGeoFence deactivates the geo-fence alert on the vehicle
+func (v *Vehicle) DeactivateGeoFence() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "deactivate",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// =============================================================================
+// Speed Fence (Speed Alerts)
+// =============================================================================
+
+// SpeedFenceSettings represents a speed alert configuration
+type SpeedFenceSettings struct {
+	Enabled    bool   `json:"enabled"`
+	SpeedLimit int    `json:"speedLimit"`
+	SpeedUnit  string `json:"speedUnit"` // MPH or KPH
+}
+
+// GetSpeedFenceSettings retrieves the current speed fence (speed alert) settings
+func (v *Vehicle) GetSpeedFenceSettings() (*SpeedFenceSettings, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE_FETCH"]
+	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetSpeedFenceSettings request", "error", err.Error())
+		return nil, err
+	}
+
+	var settings SpeedFenceSettings
+	if err := json.Unmarshal(resp.Data, &settings); err != nil {
+		v.client.logger.Error("error parsing speed fence settings", "error", err.Error())
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+// SaveSpeedFenceSettings saves speed fence (speed alert) settings
+func (v *Vehicle) SaveSpeedFenceSettings(settings SpeedFenceSettings) error {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{
+		"vin":        v.Vin,
+		"speedLimit": strconv.Itoa(settings.SpeedLimit),
+		"speedUnit":  settings.SpeedUnit,
+		"enabled":    strconv.FormatBool(settings.Enabled),
+	}
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE_SAVE"]
+	_, err := v.client.execute(POST, reqUrl, params, true)
+	if err != nil {
+		v.client.logger.Error("error saving speed fence settings", "error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// ActivateSpeedFence activates the speed fence alert on the vehicle
+func (v *Vehicle) ActivateSpeedFence() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "activate",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// DeactivateSpeedFence deactivates the speed fence alert on the vehicle
+func (v *Vehicle) DeactivateSpeedFence() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "deactivate",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// =============================================================================
+// Curfew Alerts
+// =============================================================================
+
+// CurfewSettings represents a curfew (time fence) alert configuration
+type CurfewSettings struct {
+	Enabled   bool   `json:"enabled"`
+	Name      string `json:"name,omitempty"`
+	StartTime string `json:"startTime"` // HH:MM format
+	EndTime   string `json:"endTime"`   // HH:MM format
+	Days      []string `json:"days"`    // SUN, MON, TUE, WED, THU, FRI, SAT
+}
+
+// GetCurfewSettings retrieves the current curfew alert settings
+func (v *Vehicle) GetCurfewSettings() (*CurfewSettings, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW_FETCH"]
+	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetCurfewSettings request", "error", err.Error())
+		return nil, err
+	}
+
+	var settings CurfewSettings
+	if err := json.Unmarshal(resp.Data, &settings); err != nil {
+		v.client.logger.Error("error parsing curfew settings", "error", err.Error())
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+// SaveCurfewSettings saves curfew alert settings
+func (v *Vehicle) SaveCurfewSettings(settings CurfewSettings) error {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
+	}
+	v.ensureVehicleSelected()
+
+	daysStr := strings.Join(settings.Days, ",")
+	params := map[string]string{
+		"vin":       v.Vin,
+		"startTime": settings.StartTime,
+		"endTime":   settings.EndTime,
+		"days":      daysStr,
+		"enabled":   strconv.FormatBool(settings.Enabled),
+	}
+	if settings.Name != "" {
+		params["name"] = settings.Name
+	}
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW_SAVE"]
+	_, err := v.client.execute(POST, reqUrl, params, true)
+	if err != nil {
+		v.client.logger.Error("error saving curfew settings", "error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// ActivateCurfew activates the curfew alert on the vehicle
+func (v *Vehicle) ActivateCurfew() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "activate",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// DeactivateCurfew deactivates the curfew alert on the vehicle
+func (v *Vehicle) DeactivateCurfew() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "deactivate",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// =============================================================================
+// Trip Tracker / Driving Journal
+// =============================================================================
+
+// Trip represents a trip record from the vehicle
+type Trip struct {
+	TripID         string    `json:"tripId,omitempty"`
+	StartDate      time.Time `json:"tripStartDate"`
+	StopDate       time.Time `json:"tripStopDate"`
+	StartLatitude  float64   `json:"startLatitude,omitempty"`
+	StartLongitude float64   `json:"startLongitude,omitempty"`
+	EndLatitude    float64   `json:"endLatitude,omitempty"`
+	EndLongitude   float64   `json:"endLongitude,omitempty"`
+	DistanceMiles  float64   `json:"distanceMiles,omitempty"`
+	DistanceKm     float64   `json:"distanceKm,omitempty"`
+}
+
+// GetTrips retrieves the list of trips for the vehicle
+func (v *Vehicle) GetTrips() ([]Trip, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{"vin": v.Vin}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_TRIPS_DISPLAY"]
+	resp, err := v.client.execute(GET, reqUrl, params, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetTrips request", "error", err.Error())
+		return nil, err
+	}
+
+	var trips []Trip
+	if err := json.Unmarshal(resp.Data, &trips); err != nil {
+		v.client.logger.Error("error parsing trips", "error", err.Error())
+		return nil, err
+	}
+
+	return trips, nil
+}
+
+// TripLogStart starts trip logging on the vehicle
+func (v *Vehicle) TripLogStart() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "start",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_TRIPLOG_COMMAND"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// TripLogStop stops trip logging on the vehicle
+func (v *Vehicle) TripLogStop() (chan string, error) {
+	params := map[string]string{
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
+		"action": "stop",
+	}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_TRIPLOG_COMMAND"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// DeleteTrip deletes a trip log by ID
+func (v *Vehicle) DeleteTrip(tripID string) error {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{
+		"vin":    v.Vin,
+		"tripId": tripID,
+	}
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_TRIP_DELETE"]
+	_, err := v.client.execute(POST, reqUrl, params, true)
+	if err != nil {
+		v.client.logger.Error("error deleting trip", "error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// =============================================================================
+// POI / Destinations
+// =============================================================================
+
+// POI represents a Point of Interest that can be sent to the vehicle
+type POI struct {
+	Name      string  `json:"name"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Address   string  `json:"address,omitempty"`
+	City      string  `json:"city,omitempty"`
+	State     string  `json:"state,omitempty"`
+	Zip       string  `json:"zip,omitempty"`
+	Category  string  `json:"category,omitempty"`
+}
+
+// SendPOI sends a Point of Interest (destination) to the vehicle's navigation system
+func (v *Vehicle) SendPOI(poi POI) (chan string, error) {
+	params := map[string]string{
+		"vin":       v.Vin,
+		"pin":       v.client.credentials.PIN,
+		"name":      poi.Name,
+		"latitude":  fmt.Sprintf("%f", poi.Latitude),
+		"longitude": fmt.Sprintf("%f", poi.Longitude),
+	}
+	if poi.Address != "" {
+		params["address"] = poi.Address
+	}
+	if poi.City != "" {
+		params["city"] = poi.City
+	}
+	if poi.State != "" {
+		params["state"] = poi.State
+	}
+	if poi.Zip != "" {
+		params["zip"] = poi.Zip
+	}
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SEND_POI"]
+	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_SEND_POI_STATUS"]
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+
+	return ch, nil
+}
+
+// GetFavoritePOIs retrieves the list of favorite POIs saved for the vehicle
+func (v *Vehicle) GetFavoritePOIs() ([]POI, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{"vin": v.Vin}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_POI_FAVORITE_RETRIEVE"]
+	resp, err := v.client.execute(GET, reqUrl, params, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetFavoritePOIs request", "error", err.Error())
+		return nil, err
+	}
+
+	var pois []POI
+	if err := json.Unmarshal(resp.Data, &pois); err != nil {
+		v.client.logger.Error("error parsing favorite POIs", "error", err.Error())
+		return nil, err
+	}
+
+	return pois, nil
+}
+
+// SaveFavoritePOI saves a POI to favorites
+func (v *Vehicle) SaveFavoritePOI(poi POI) error {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{
+		"vin":       v.Vin,
+		"name":      poi.Name,
+		"latitude":  fmt.Sprintf("%f", poi.Latitude),
+		"longitude": fmt.Sprintf("%f", poi.Longitude),
+	}
+	if poi.Address != "" {
+		params["address"] = poi.Address
+	}
+	if poi.City != "" {
+		params["city"] = poi.City
+	}
+	if poi.State != "" {
+		params["state"] = poi.State
+	}
+	if poi.Zip != "" {
+		params["zip"] = poi.Zip
+	}
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_POI_CREATE"]
+	_, err := v.client.execute(POST, reqUrl, params, true)
+	if err != nil {
+		v.client.logger.Error("error saving favorite POI", "error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// =============================================================================
+// Roadside Assistance
+// =============================================================================
+
+// RoadsideAssistanceInfo represents roadside assistance contact information
+type RoadsideAssistanceInfo struct {
+	PhoneNumber    string `json:"phoneNumber"`
+	Available24x7  bool   `json:"available24x7"`
+	CoverageActive bool   `json:"coverageActive"`
+}
+
+// GetRoadsideAssistance retrieves roadside assistance information for the vehicle
+func (v *Vehicle) GetRoadsideAssistance() (*RoadsideAssistanceInfo, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{"vin": v.Vin}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_ROADSIDE_ASSISTANCE"]
+	resp, err := v.client.execute(GET, reqUrl, params, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetRoadsideAssistance request", "error", err.Error())
+		return nil, err
+	}
+
+	var info RoadsideAssistanceInfo
+	if err := json.Unmarshal(resp.Data, &info); err != nil {
+		v.client.logger.Error("error parsing roadside assistance info", "error", err.Error())
+		return nil, err
+	}
+
+	return &info, nil
+}
+
+// RequestRoadsideAssistance submits a roadside assistance request
+func (v *Vehicle) RequestRoadsideAssistance(latitude, longitude float64, description string) error {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{
+		"vin":         v.Vin,
+		"latitude":    fmt.Sprintf("%f", latitude),
+		"longitude":   fmt.Sprintf("%f", longitude),
+		"description": description,
+	}
+
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_ROADSIDE_ASSISTANCE_REQUEST"]
+	_, err := v.client.execute(POST, reqUrl, params, true)
+	if err != nil {
+		v.client.logger.Error("error requesting roadside assistance", "error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// =============================================================================
+// Recalls and Warnings
+// =============================================================================
+
+// Recall represents a vehicle recall notice
+type Recall struct {
+	RecallID     string `json:"recallId"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	DateIssued   string `json:"dateIssued"`
+	Remedy       string `json:"remedy,omitempty"`
+	Status       string `json:"status"` // OPEN, COMPLETED
+}
+
+// GetRecalls retrieves any active recalls for the vehicle
+func (v *Vehicle) GetRecalls() ([]Recall, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{"vin": v.Vin}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_RECALLS_BY_VIN"]
+	resp, err := v.client.execute(GET, reqUrl, params, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetRecalls request", "error", err.Error())
+		return nil, err
+	}
+
+	var recalls []Recall
+	if err := json.Unmarshal(resp.Data, &recalls); err != nil {
+		v.client.logger.Error("error parsing recalls", "error", err.Error())
+		return nil, err
+	}
+
+	return recalls, nil
+}
+
+// WarningLight represents an active warning light on the dashboard
+type WarningLight struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Severity    string `json:"severity"` // INFO, WARNING, CRITICAL
+}
+
+// GetWarningLights retrieves any active warning lights for the vehicle
+func (v *Vehicle) GetWarningLights() ([]WarningLight, error) {
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return nil, err
+	}
+	v.ensureVehicleSelected()
+
+	params := map[string]string{"vin": v.Vin}
+	reqUrl := MOBILE_API_VERSION + apiURLs["API_WARNING_LIGHTS"]
+	resp, err := v.client.execute(GET, reqUrl, params, false)
+	if err != nil {
+		v.client.logger.Error("error executing GetWarningLights request", "error", err.Error())
+		return nil, err
+	}
+
+	var lights []WarningLight
+	if err := json.Unmarshal(resp.Data, &lights); err != nil {
+		v.client.logger.Error("error parsing warning lights", "error", err.Error())
+		return nil, err
+	}
+
+	return lights, nil
+}

@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "errorCode": null,
+  "dataName": "geoFenceSettings",
+  "data": {
+    "enabled": true,
+    "name": "Home",
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "radius": 5,
+    "radiusUnit": "MILES",
+    "notifyOnEntry": true,
+    "notifyOnExit": true,
+    "schedule": {
+      "enabled": true,
+      "days": ["MON", "TUE", "WED", "THU", "FRI"],
+      "startTime": "08:00",
+      "endTime": "18:00"
+    }
+  }
+}
