@@ -806,7 +806,7 @@ func TestG2FeaturesWithFixtures(t *testing.T) {
 	}
 
 	// Test GetTrips - note: may return empty slice or have parsing issues with fixture format
-	trips, err := vehicle.GetTrips()
+	trips, _ := vehicle.GetTrips()
 	// We don't check for error here since parsing the fixture may fail
 	// The important test is that the method can be called
 	_ = trips
@@ -947,7 +947,7 @@ func TestPOIWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetFavoritePOIs - note: may have parsing issues with fixture format
-	pois, err := vehicle.GetFavoritePOIs()
+	pois, _ := vehicle.GetFavoritePOIs()
 	// We don't check for error here since parsing the fixture may fail
 	// The important test is that the method can be called
 	_ = pois
