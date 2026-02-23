@@ -400,10 +400,10 @@ func TestNegativeAckError(t *testing.T) {
 // TestPINLockedError tests the PINLockedError type
 func TestPINLockedError(t *testing.T) {
 	tests := []struct {
-		name           string
-		err            PINLockedError
-		wantMessage    string
-		wantMinutes    int
+		name        string
+		err         PINLockedError
+		wantMessage string
+		wantMinutes int
 	}{
 		{
 			name: "15 minute lockout",
@@ -438,9 +438,9 @@ func TestPINLockedError(t *testing.T) {
 // TestIsNegativeAckError tests the IsNegativeAckError helper function
 func TestIsNegativeAckError(t *testing.T) {
 	tests := []struct {
-		name   string
-		err    error
-		want   bool
+		name string
+		err  error
+		want bool
 	}{
 		{
 			name: "NegativeAckError returns true",
@@ -474,14 +474,14 @@ func TestIsNegativeAckError(t *testing.T) {
 // TestIsPINLockedError tests the IsPINLockedError helper function
 func TestIsPINLockedError(t *testing.T) {
 	tests := []struct {
-		name   string
-		err    error
-		want   bool
+		name string
+		err  error
+		want bool
 	}{
 		{
-			name:   "PINLockedError returns true",
-			err:    PINLockedError{MinutesRemaining: 15},
-			want:   true,
+			name: "PINLockedError returns true",
+			err:  PINLockedError{MinutesRemaining: 15},
+			want: true,
 		},
 		{
 			name: "NegativeAckError returns false",
@@ -581,4 +581,3 @@ func TestParseAPIError(t *testing.T) {
 		})
 	}
 }
-

@@ -688,9 +688,9 @@ func TestSpeedFencingWithFixtures(t *testing.T) {
 // TestCurfewWithFixtures tests curfew features using fixtures
 func TestCurfewWithFixtures(t *testing.T) {
 	fixtures := map[string]string{
-		apiURLs["API_LOGIN"]:                 "login_single_car.json",
+		apiURLs["API_LOGIN"]:                  "login_single_car.json",
 		apiURLs["API_G2_CURFEW_ALERT_STATUS"]: "curfewSettings.json",
-		apiURLs["API_REMOTE_SVC_STATUS"]:     "remoteServiceStatus.json",
+		apiURLs["API_REMOTE_SVC_STATUS"]:      "remoteServiceStatus.json",
 	}
 
 	ts := mockMySubaruApiWithFixtures(t, fixtures)
@@ -748,10 +748,10 @@ func TestCurfewWithFixtures(t *testing.T) {
 // TestG2FeaturesWithFixtures tests G2 telematics features using fixtures
 func TestG2FeaturesWithFixtures(t *testing.T) {
 	fixtures := map[string]string{
-		apiURLs["API_LOGIN"]:                       "login_single_car.json",
-		apiURLs["API_G2_VALET_MODE_STATUS"]:        "valetModeSettings.json",
-		apiURLs["API_G2_TRIP_LOG_FETCH"]:           "trips.json",
-		apiURLs["API_REMOTE_SVC_STATUS"]:           "remoteServiceStatus.json",
+		apiURLs["API_LOGIN"]:                "login_single_car.json",
+		apiURLs["API_G2_VALET_MODE_STATUS"]: "valetModeSettings.json",
+		apiURLs["API_G2_TRIP_LOG_FETCH"]:    "trips.json",
+		apiURLs["API_REMOTE_SVC_STATUS"]:    "remoteServiceStatus.json",
 	}
 
 	ts := mockMySubaruApiWithFixtures(t, fixtures)
@@ -968,8 +968,8 @@ func TestPOIWithFixtures(t *testing.T) {
 // TestRoadsideAssistanceWithFixtures tests roadside assistance features using fixtures
 func TestRoadsideAssistanceWithFixtures(t *testing.T) {
 	fixtures := map[string]string{
-		apiURLs["API_LOGIN"]:            "login_single_car.json",
-		apiURLs["API_ROADSIDE_STATUS"]:  "roadsideAssistance.json",
+		apiURLs["API_LOGIN"]:           "login_single_car.json",
+		apiURLs["API_ROADSIDE_STATUS"]: "roadsideAssistance.json",
 	}
 
 	ts := mockMySubaruApiWithFixtures(t, fixtures)

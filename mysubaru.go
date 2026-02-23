@@ -62,23 +62,23 @@ var (
 
 // Negative acknowledgement errors (vehicle-side rejections)
 var (
-	ErrAccIsOn             = NegativeAckError{Code: "ACC_IS_ON", Message: "Vehicle is in accessory mode"}
-	ErrDoorNotClosed       = NegativeAckError{Code: "DOOR_NOT_CLOSED", Message: "A door is not closed"}
-	ErrDoorAjar            = NegativeAckError{Code: "DOOR_AJAR", Message: "Door ajar - remote start blocked"}
-	ErrEngineHoodOpen      = NegativeAckError{Code: "ENGINE_HOOD_OPEN", Message: "Engine hood is open"}
-	ErrFuelLevelLow        = NegativeAckError{Code: "FUEL_LEVEL_LOW", Message: "Fuel level is too low"}
-	ErrIgnitionOn          = NegativeAckError{Code: "IGNITION_ON", Message: "Ignition is on"}
-	ErrKeyInIgnition       = NegativeAckError{Code: "KEY_IN_IGNITION", Message: "Key is in ignition"}
-	ErrMaxRESExceeded      = NegativeAckError{Code: "MAX_RES_EXCEEDED", Message: "Maximum remote engine start time (20 min) exceeded"}
-	ErrMFDInUse            = NegativeAckError{Code: "MFD_IN_USE", Message: "Multifunction display is in use"}
-	ErrNoSlotsLeft         = NegativeAckError{Code: "NO_SLOTS_LEFT", Message: "PHEV charge schedule is full"}
-	ErrOtherCommandOngoing = NegativeAckError{Code: "OTHER_COMMAND_ONGOING", Message: "Another command is already in progress"}
-	ErrPINNotSetInHU       = NegativeAckError{Code: "PIN_NOT_SET_IN_HU", Message: "Valet PIN not set in vehicle head unit"}
-	ErrBackupBattery       = NegativeAckError{Code: "BACKUP_BATTERY", Message: "Vehicle is running on backup battery"}
-	ErrSecurityAlarmOn     = NegativeAckError{Code: "SECURITY_ALARM_ON", Message: "Security alarm is active"}
+	ErrAccIsOn              = NegativeAckError{Code: "ACC_IS_ON", Message: "Vehicle is in accessory mode"}
+	ErrDoorNotClosed        = NegativeAckError{Code: "DOOR_NOT_CLOSED", Message: "A door is not closed"}
+	ErrDoorAjar             = NegativeAckError{Code: "DOOR_AJAR", Message: "Door ajar - remote start blocked"}
+	ErrEngineHoodOpen       = NegativeAckError{Code: "ENGINE_HOOD_OPEN", Message: "Engine hood is open"}
+	ErrFuelLevelLow         = NegativeAckError{Code: "FUEL_LEVEL_LOW", Message: "Fuel level is too low"}
+	ErrIgnitionOn           = NegativeAckError{Code: "IGNITION_ON", Message: "Ignition is on"}
+	ErrKeyInIgnition        = NegativeAckError{Code: "KEY_IN_IGNITION", Message: "Key is in ignition"}
+	ErrMaxRESExceeded       = NegativeAckError{Code: "MAX_RES_EXCEEDED", Message: "Maximum remote engine start time (20 min) exceeded"}
+	ErrMFDInUse             = NegativeAckError{Code: "MFD_IN_USE", Message: "Multifunction display is in use"}
+	ErrNoSlotsLeft          = NegativeAckError{Code: "NO_SLOTS_LEFT", Message: "PHEV charge schedule is full"}
+	ErrOtherCommandOngoing  = NegativeAckError{Code: "OTHER_COMMAND_ONGOING", Message: "Another command is already in progress"}
+	ErrPINNotSetInHU        = NegativeAckError{Code: "PIN_NOT_SET_IN_HU", Message: "Valet PIN not set in vehicle head unit"}
+	ErrBackupBattery        = NegativeAckError{Code: "BACKUP_BATTERY", Message: "Vehicle is running on backup battery"}
+	ErrSecurityAlarmOn      = NegativeAckError{Code: "SECURITY_ALARM_ON", Message: "Security alarm is active"}
 	ErrVehicleNotStationary = NegativeAckError{Code: "VEHICLE_NOT_STATIONARY", Message: "Vehicle is in motion"}
-	ErrNotPluggedIn        = NegativeAckError{Code: "NOT_PLUGGED_IN", Message: "PHEV is not plugged in"}
-	ErrDeviceNotAuth       = NegativeAckError{Code: "DEVICE_NOT_AUTH", Message: "Device not authenticated for remote services"}
+	ErrNotPluggedIn         = NegativeAckError{Code: "NOT_PLUGGED_IN", Message: "PHEV is not plugged in"}
+	ErrDeviceNotAuth        = NegativeAckError{Code: "DEVICE_NOT_AUTH", Message: "Device not authenticated for remote services"}
 )
 
 // IsRetryableError checks if an error is retryable

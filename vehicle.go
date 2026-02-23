@@ -1991,13 +1991,13 @@ func (v *Vehicle) GetModelInfo() (model string, trim string) {
 
 // ValetModeSettings represents the valet mode configuration
 type ValetModeSettings struct {
-	Enabled      bool   `json:"enabled"`
-	SpeedLimit   int    `json:"speedLimit,omitempty"`
-	SpeedUnit    string `json:"speedUnit,omitempty"` // MPH or KPH
-	GeoFenceOn   bool   `json:"geoFenceOn,omitempty"`
-	GeoFenceLat  float64 `json:"geoFenceLat,omitempty"`
-	GeoFenceLng  float64 `json:"geoFenceLng,omitempty"`
-	GeoFenceRadius int  `json:"geoFenceRadius,omitempty"`
+	Enabled        bool    `json:"enabled"`
+	SpeedLimit     int     `json:"speedLimit,omitempty"`
+	SpeedUnit      string  `json:"speedUnit,omitempty"` // MPH or KPH
+	GeoFenceOn     bool    `json:"geoFenceOn,omitempty"`
+	GeoFenceLat    float64 `json:"geoFenceLat,omitempty"`
+	GeoFenceLng    float64 `json:"geoFenceLng,omitempty"`
+	GeoFenceRadius int     `json:"geoFenceRadius,omitempty"`
 }
 
 // GetValetModeStatus retrieves the current valet mode status
@@ -2049,9 +2049,9 @@ func (v *Vehicle) GetValetModeSettings() (*ValetModeSettings, error) {
 // ValetModeStart enables valet mode on the vehicle
 func (v *Vehicle) ValetModeStart() (chan string, error) {
 	params := map[string]string{
-		"delay": "0",
-		"vin":   v.Vin,
-		"pin":   v.client.credentials.PIN,
+		"delay":  "0",
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
 		"action": "start",
 	}
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_MODE"]
@@ -2069,9 +2069,9 @@ func (v *Vehicle) ValetModeStart() (chan string, error) {
 // ValetModeStop disables valet mode on the vehicle
 func (v *Vehicle) ValetModeStop() (chan string, error) {
 	params := map[string]string{
-		"delay": "0",
-		"vin":   v.Vin,
-		"pin":   v.client.credentials.PIN,
+		"delay":  "0",
+		"vin":    v.Vin,
+		"pin":    v.client.credentials.PIN,
 		"action": "stop",
 	}
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_MODE"]
@@ -2089,10 +2089,10 @@ func (v *Vehicle) ValetModeStop() (chan string, error) {
 // SaveValetModeSettings saves custom valet mode settings
 func (v *Vehicle) SaveValetModeSettings(settings ValetModeSettings) (chan string, error) {
 	params := map[string]string{
-		"vin":          v.Vin,
-		"pin":          v.client.credentials.PIN,
-		"speedLimit":   strconv.Itoa(settings.SpeedLimit),
-		"speedUnit":    settings.SpeedUnit,
+		"vin":        v.Vin,
+		"pin":        v.client.credentials.PIN,
+		"speedLimit": strconv.Itoa(settings.SpeedLimit),
+		"speedUnit":  settings.SpeedUnit,
 	}
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_SETTINGS_SAVE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
@@ -2112,13 +2112,13 @@ func (v *Vehicle) SaveValetModeSettings(settings ValetModeSettings) (chan string
 
 // GeoFenceSettings represents a boundary alert configuration
 type GeoFenceSettings struct {
-	Enabled    bool    `json:"enabled"`
-	Name       string  `json:"name,omitempty"`
-	Latitude   float64 `json:"latitude"`
-	Longitude  float64 `json:"longitude"`
-	Radius     int     `json:"radius"` // in meters
-	AlertOnExit bool   `json:"alertOnExit"`
-	AlertOnEntry bool  `json:"alertOnEntry"`
+	Enabled      bool    `json:"enabled"`
+	Name         string  `json:"name,omitempty"`
+	Latitude     float64 `json:"latitude"`
+	Longitude    float64 `json:"longitude"`
+	Radius       int     `json:"radius"` // in meters
+	AlertOnExit  bool    `json:"alertOnExit"`
+	AlertOnEntry bool    `json:"alertOnEntry"`
 }
 
 // GetGeoFenceSettings retrieves the current geo-fence (boundary alert) settings
@@ -2314,11 +2314,11 @@ func (v *Vehicle) DeactivateSpeedFence() (chan string, error) {
 
 // CurfewSettings represents a curfew (time fence) alert configuration
 type CurfewSettings struct {
-	Enabled   bool   `json:"enabled"`
-	Name      string `json:"name,omitempty"`
-	StartTime string `json:"startTime"` // HH:MM format
-	EndTime   string `json:"endTime"`   // HH:MM format
-	Days      []string `json:"days"`    // SUN, MON, TUE, WED, THU, FRI, SAT
+	Enabled   bool     `json:"enabled"`
+	Name      string   `json:"name,omitempty"`
+	StartTime string   `json:"startTime"` // HH:MM format
+	EndTime   string   `json:"endTime"`   // HH:MM format
+	Days      []string `json:"days"`      // SUN, MON, TUE, WED, THU, FRI, SAT
 }
 
 // GetCurfewSettings retrieves the current curfew alert settings
@@ -2687,12 +2687,12 @@ func (v *Vehicle) RequestRoadsideAssistance(latitude, longitude float64, descrip
 
 // Recall represents a vehicle recall notice
 type Recall struct {
-	RecallID     string `json:"recallId"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	DateIssued   string `json:"dateIssued"`
-	Remedy       string `json:"remedy,omitempty"`
-	Status       string `json:"status"` // OPEN, COMPLETED
+	RecallID    string `json:"recallId"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	DateIssued  string `json:"dateIssued"`
+	Remedy      string `json:"remedy,omitempty"`
+	Status      string `json:"status"` // OPEN, COMPLETED
 }
 
 // GetRecalls retrieves any active recalls for the vehicle
