@@ -55,12 +55,12 @@ type Client struct {
 	// apiVer holds the current API version prefix (e.g. "/g2v33"), auto-bumped on
 	// 404. apiBumps counts bumps against apiVersionRetryLimit. Both atomic so the
 	// request path reads them without taking a lock.
-	apiVer   atomic.Pointer[string]
-	apiBumps atomic.Int32
-	updateInterval  int // 7200
-	fetchInterval   int // 360
-	logger          *slog.Logger
-	metrics         config.MetricsRecorder
+	apiVer         atomic.Pointer[string]
+	apiBumps       atomic.Int32
+	updateInterval int // 7200
+	fetchInterval  int // 360
+	logger         *slog.Logger
+	metrics        config.MetricsRecorder
 	sync.RWMutex
 }
 
@@ -755,7 +755,7 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 		return nil, pkgerrors.New("failed to parse response")
 	}
 
-	if resp.IsSuccess() && r.Success {
+	if resp.IsStatusSuccess() && r.Success {
 		c.metrics.RecordRequest(method, url, duration, true)
 		c.isAlive.Store(true)
 		return &r, nil
@@ -763,7 +763,7 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 
 	c.handleAPIError(&r)
 
-	if resp.IsSuccess() && !r.Success {
+	if resp.IsStatusSuccess() && !r.Success {
 		// handleAPIError (above) already classifies and logs the specific error;
 		// this is redundant diagnostic detail, so keep it at debug. A genuine,
 		// unrecovered failure still surfaces via the retry-exhaustion error path.
