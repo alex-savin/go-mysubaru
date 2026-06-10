@@ -4,7 +4,11 @@
 package mysubaru
 
 // API Configuration
-var MOBILE_API_VERSION = "/g2v32"
+// MOBILE_API_VERSION is the default MySubaru mobile API version prefix. Subaru
+// periodically bumps this (e.g. /g2v32 -> /g2v33), retiring the old one with a
+// 404; the client auto-increments from here at runtime (see bumpAPIVersion), so
+// this only needs to track a recent known-good version.
+var MOBILE_API_VERSION = "/g2v33"
 
 var MOBILE_API_SERVER = map[string]string{
 	"USA":  "https://mobileapi.prod.subarucs.com",
@@ -273,6 +277,23 @@ var API_ERRORS = map[string]string{
 	"NACK_VEHICLE_NOT_PLUGGED_IN":    "NegativeAcknowledge_vehicleIsNotPluggedin",
 	"NACK_DOOR_AJAR":                 "DOOR_AJAR",
 	"NACK_DEVICE_NOT_AUTHENTICATED":  "DEVICE_NOT_AUTHENTICATED",
+}
+
+// wireToSymbol is the reverse of API_ERRORS (wire label -> symbolic key), built
+// once so error classification is an O(1) lookup instead of scanning the map.
+var wireToSymbol = func() map[string]string {
+	m := make(map[string]string, len(API_ERRORS))
+	for symbol, label := range API_ERRORS {
+		m[label] = symbol
+	}
+	return m
+}()
+
+// isKnownAPIErrorLabel reports whether a wire error label is one the client
+// recognizes (i.e. a value of API_ERRORS).
+func isKnownAPIErrorLabel(label string) bool {
+	_, ok := wireToSymbol[label]
+	return ok
 }
 
 var APP_ERRORS = map[string]string{

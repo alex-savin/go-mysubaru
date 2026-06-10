@@ -9,8 +9,9 @@ import (
 	"log/slog"
 	"regexp"
 	"slices"
-	"strings"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alex-savin/go-mysubaru/config"
@@ -18,22 +19,149 @@ import (
 	"resty.dev/v3"
 )
 
+// ErrDeviceNotRegistered indicates the device must complete 2FA/registration
+// before authentication can succeed. Callers can detect it with errors.Is.
+var ErrDeviceNotRegistered = errors.New("device is not registered")
+
+// apiVersionRetryLimit caps how many times the client auto-increments the API
+// version in response to HTTP 404s before giving up (mirrors subarulink).
+const apiVersionRetryLimit = 5
+
+var (
+	// apiVersionPrefixRe matches the leading /g2vNN version segment of a path.
+	apiVersionPrefixRe = regexp.MustCompile(`^/g2v\d+`)
+	// apiVersionNumRe matches the trailing version number of a version prefix.
+	apiVersionNumRe = regexp.MustCompile(`\d+$`)
+)
+
 // Client represents a MySubaru API client that interacts with the MySubaru API.
 type Client struct {
-	credentials     config.Credentials
-	httpClient      *resty.Client
-	country         string  // USA | CA
-	contactMethods  dataMap // List of contact methods for 2FA
-	currentVin      string
-	listOfVins      []string
-	isAuthenticated bool
-	isRegistered    bool
-	isAlive         bool
+	credentials config.Credentials
+	httpClient  *resty.Client
+	country     string // USA | CA
+	// stateMu guards session state mutated by auth/re-auth on background
+	// goroutines while pollers/commands read it: contactMethods, currentVin,
+	// listOfVins. It is distinct from the embedded request-serialization mutex,
+	// and is never acquired while that mutex is held (and vice-versa).
+	stateMu        sync.RWMutex
+	contactMethods dataMap // List of contact methods for 2FA
+	currentVin     string
+	listOfVins     []string
+	// Liveness/auth flags are written from both inside and outside the request
+	// lock, so they are atomic to stay race-free without lock-ordering concerns.
+	isAuthenticated atomic.Bool
+	isRegistered    atomic.Bool
+	isAlive         atomic.Bool
+	// apiVer holds the current API version prefix (e.g. "/g2v33"), auto-bumped on
+	// 404. apiBumps counts bumps against apiVersionRetryLimit. Both atomic so the
+	// request path reads them without taking a lock.
+	apiVer   atomic.Pointer[string]
+	apiBumps atomic.Int32
 	updateInterval  int // 7200
 	fetchInterval   int // 360
 	logger          *slog.Logger
 	metrics         config.MetricsRecorder
 	sync.RWMutex
+}
+
+// session-state accessors (guarded by stateMu) ------------------------------
+
+func (c *Client) getCurrentVin() string {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.currentVin
+}
+
+func (c *Client) setCurrentVin(vin string) {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	c.currentVin = vin
+}
+
+func (c *Client) getVins() []string {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return slices.Clone(c.listOfVins)
+}
+
+func (c *Client) hasVin(vin string) bool {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return slices.Contains(c.listOfVins, vin)
+}
+
+// setVins replaces the VIN list and returns the first VIN (or "" if empty).
+func (c *Client) setVins(vins []string) string {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	c.listOfVins = vins
+	if len(vins) > 0 {
+		c.currentVin = vins[0]
+		return vins[0]
+	}
+	return ""
+}
+
+func (c *Client) getContactMethodsData() dataMap {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.contactMethods
+}
+
+func (c *Client) setContactMethodsData(dm dataMap) {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	c.contactMethods = dm
+}
+
+// httpC returns the current resty client under the request lock. resetSession
+// can swap the pointer, so callers that use it outside executeOnce must capture
+// it through this accessor to avoid racing that swap.
+func (c *Client) httpC() *resty.Client {
+	c.RLock()
+	defer c.RUnlock()
+	return c.httpClient
+}
+
+// getAPIVersion returns the current API version prefix, falling back to the
+// package default when unset (e.g. a Client built without New, as in tests).
+func (c *Client) getAPIVersion() string {
+	if p := c.apiVer.Load(); p != nil && *p != "" {
+		return *p
+	}
+	return MOBILE_API_VERSION
+}
+
+// applyAPIVersion rewrites a path's leading /g2vNN segment to the client's
+// current version, so call sites can keep using the package default while the
+// client transparently follows version bumps. Non-versioned paths pass through.
+func (c *Client) applyAPIVersion(url string) string {
+	if apiVersionPrefixRe.MatchString(url) {
+		return apiVersionPrefixRe.ReplaceAllString(url, c.getAPIVersion())
+	}
+	return url
+}
+
+// bumpAPIVersion increments the trailing number of the current API version
+// (e.g. /g2v33 -> /g2v34) after a 404, persisting it for subsequent requests.
+// Returns false once apiVersionRetryLimit is reached so the caller stops.
+func (c *Client) bumpAPIVersion() bool {
+	if c.apiBumps.Load() >= apiVersionRetryLimit {
+		return false
+	}
+	cur := c.getAPIVersion()
+	m := apiVersionNumRe.FindString(cur)
+	if m == "" {
+		return false
+	}
+	n, err := strconv.Atoi(m)
+	if err != nil {
+		return false
+	}
+	next := cur[:len(cur)-len(m)] + strconv.Itoa(n+1)
+	c.apiVer.Store(&next)
+	c.apiBumps.Add(1)
+	return true
 }
 
 // New function creates a New MySubaru API client
@@ -51,6 +179,8 @@ func New(config *config.Config) (*Client, error) {
 		logger:         config.Logger,
 		metrics:        metrics,
 	}
+	initialVersion := MOBILE_API_VERSION
+	client.apiVer.Store(&initialVersion)
 
 	httpClient := resty.New()
 	httpClient.
@@ -104,6 +234,7 @@ func (c *Client) auth() (bool, error) {
 	err = json.Unmarshal(resp.Data, &sd)
 	if err != nil {
 		c.logger.Error("error while parsing json", "request", "auth", "error", err.Error())
+		return false, pkgerrors.Wrap(err, "failed to parse auth response")
 	}
 	// client.logger.Debug("unmarshaled json data", "request", "auth", "type", "sessionData", "body", sd)
 
@@ -115,21 +246,22 @@ func (c *Client) auth() (bool, error) {
 		}
 
 		c.logger.Error("device is not registered", "request", "auth", "deviceId", c.credentials.DeviceID)
-		return false, errors.New("device is not registered: " + c.credentials.DeviceID)
+		return false, fmt.Errorf("%w: %s", ErrDeviceNotRegistered, c.credentials.DeviceID)
 	}
 
 	if sd.DeviceRegistered && sd.RegisteredDevicePermanent {
-		c.isAuthenticated = true
-		c.isRegistered = true
-		c.isAlive = true
+		c.isAuthenticated.Store(true)
+		c.isRegistered.Store(true)
+		c.isAlive.Store(true)
 	}
 	c.logger.Debug("MySubaru API client authenticated")
 
 	if len(sd.Vehicles) > 0 {
+		vins := make([]string, 0, len(sd.Vehicles))
 		for _, vehicle := range sd.Vehicles {
-			c.listOfVins = append(c.listOfVins, vehicle.Vin)
+			vins = append(vins, vehicle.Vin)
 		}
-		c.currentVin = c.listOfVins[0]
+		c.setVins(vins) // replaces (not appends) so re-auth doesn't duplicate VINs
 	} else {
 		errNoVehicles := errors.New("there are no vehicles associated with the account")
 		c.logger.Error("there are no vehicles associated with the account", "request", "auth", "error", errNoVehicles.Error())
@@ -156,13 +288,13 @@ func (c *Client) resetSession() {
 			"Accept":           "*/*"},
 		)
 	c.httpClient = httpClient
-	c.isAlive = false
+	c.isAlive.Store(false)
 }
 
 // SelectVehicle selects a vehicle by its VIN. If no VIN is provided, it uses the current VIN.
 func (c *Client) SelectVehicle(vin string) (*VehicleData, error) {
 	if vin == "" {
-		vin = c.currentVin
+		vin = c.getCurrentVin()
 	}
 	if err := ValidateVIN(vin); err != nil {
 		return nil, err
@@ -198,7 +330,7 @@ func (c *Client) SelectVehicle(vin string) (*VehicleData, error) {
 // GetVehicles retrieves a list of vehicles associated with the client's account.
 func (c *Client) GetVehicles() ([]*Vehicle, error) {
 	var vehicles []*Vehicle
-	for _, vin := range c.listOfVins {
+	for _, vin := range c.getVins() {
 		vehicle, err := c.GetVehicleByVin(vin)
 		if err != nil {
 			c.logger.Error("cannot get vehicle data", "request", "GetVehicles", "error", err.Error())
@@ -212,7 +344,7 @@ func (c *Client) GetVehicles() ([]*Vehicle, error) {
 // GetVehicleByVin retrieves a vehicle by its VIN from the client's list of vehicles.
 func (c *Client) GetVehicleByVin(vin string) (*Vehicle, error) {
 	var vehicle *Vehicle
-	if slices.Contains(c.listOfVins, vin) {
+	if c.hasVin(vin) {
 		params := map[string]string{
 			"vin": vin,
 			"_":   timestamp()}
@@ -309,19 +441,17 @@ func (c *Client) RefreshVehicles() error {
 
 	// Update client state
 	if sd.DeviceRegistered && sd.RegisteredDevicePermanent {
-		c.isAuthenticated = true
-		c.isRegistered = true
-		c.isAlive = true
+		c.isAuthenticated.Store(true)
+		c.isRegistered.Store(true)
+		c.isAlive.Store(true)
 	}
-	c.listOfVins = []string{}
+	vins := make([]string, 0, len(sd.Vehicles))
 	for _, vehicle := range sd.Vehicles {
-		c.listOfVins = append(c.listOfVins, vehicle.Vin)
+		vins = append(vins, vehicle.Vin)
 	}
-	if len(c.listOfVins) > 0 {
-		c.currentVin = c.listOfVins[0]
-	}
+	c.setVins(vins)
 
-	c.logger.Info("vehicles refreshed successfully", "count", len(c.listOfVins))
+	c.logger.Info("vehicles refreshed successfully", "count", len(vins))
 	return nil
 }
 
@@ -337,7 +467,7 @@ func (c *Client) RequestAuthCode(email string) error {
 		return errors.New("error while hiding email: " + err.Error())
 	}
 
-	if !containsValueInStruct(c.contactMethods, email) {
+	if !containsValueInStruct(c.getContactMethodsData(), email) {
 		c.logger.Error("email is not in the list of contact methods", "request", "RequestAuthCode", "email", email)
 		return errors.New("email is not in the list of contact methods: " + email)
 	}
@@ -422,7 +552,7 @@ func (c *Client) getContactMethods() error {
 		c.logger.Error("error while parsing json", "request", "getContactMethods", "error", err.Error())
 		return errors.New("error while parsing json while getting contact methods: " + err.Error())
 	}
-	c.contactMethods = dm
+	c.setContactMethodsData(dm)
 	c.logger.Debug("contact methods successfully retrieved", "request", "getContactMethods", "methods", dm)
 
 	return nil
@@ -430,7 +560,7 @@ func (c *Client) getContactMethods() error {
 
 // RemoteUnlock unlocks the vehicle remotely.
 func (c *Client) RemoteUnlock(vin string) error {
-	if !slices.Contains(c.listOfVins, vin) {
+	if !c.hasVin(vin) {
 		return pkgerrors.New("VIN not in list")
 	}
 
@@ -504,7 +634,7 @@ func (c *Client) executeWithRetry(method string, url string, params map[string]s
 			}
 		}
 
-		c.logger.Warn("request failed, will retry", "attempt", attempt+1, "maxRetries", maxRetries, "error", err.Error())
+		c.logger.Debug("request failed, will retry", "attempt", attempt+1, "maxRetries", maxRetries, "error", err.Error())
 	}
 
 	return nil, lastErr
@@ -539,10 +669,15 @@ func (c *Client) handleAPIError(r *Response) {
 		c.logger.Error("error parsing error response", "error", jsonErr.Error())
 		return
 	}
-	if _, known := API_ERRORS[er.ErrorLabel]; known {
-		c.logger.Error("known API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
+	// API_ERRORS maps symbolic names to wire labels, so the incoming label must be
+	// matched against the map values (via the wireToSymbol reverse index). Known
+	// errors are routinely handled/retried by the caller (e.g. InvalidToken
+	// triggers re-auth), so keep them at debug; the retry layer logs a real error
+	// if recovery ultimately fails.
+	if isKnownAPIErrorLabel(er.ErrorLabel) {
+		c.logger.Debug("known API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
 	} else {
-		c.logger.Error("unknown API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
+		c.logger.Warn("unknown API error", "label", er.ErrorLabel, "description", er.ErrorDescription)
 	}
 }
 
@@ -550,10 +685,10 @@ func (c *Client) handleAPIError(r *Response) {
 func (c *Client) handleVehicleSetupError(r *Response, method, url string, duration time.Duration) (*Response, error) {
 	// With vehicle data: treat as success (user needs to complete setup but data is functional)
 	if r.DataName == "vehicle" {
-		c.logger.Warn("VEHICLESETUPERROR received but vehicle data is present; treating as success",
+		c.logger.Debug("VEHICLESETUPERROR received but vehicle data is present; treating as success",
 			"errorCode", r.ErrorCode, "dataName", r.DataName)
 		c.metrics.RecordRequest(method, url, duration, true)
-		c.isAlive = true
+		c.isAlive.Store(true)
 		return r, nil
 	}
 	// Without vehicle data: reset session and allow retry
@@ -573,8 +708,26 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	req := c.httpClient.R().SetContext(ctx)
-	resp, err := c.sendRequest(req, method, url, params, j)
+	// Subaru retires old API versions with a 404. Send against the client's
+	// current version, and on a 404 bump the version and retry in-place so the
+	// client follows version transitions without code changes.
+	var resp *resty.Response
+	var err error
+	for {
+		versionedURL := c.applyAPIVersion(url)
+		req := c.httpClient.R().SetContext(ctx)
+		resp, err = c.sendRequest(req, method, versionedURL, params, j)
+		if err == nil && resp.StatusCode() == 404 {
+			prev := c.getAPIVersion()
+			if c.bumpAPIVersion() {
+				_ = resp.Body.Close()
+				c.logger.Warn("API version returned 404; bumping and retrying",
+					"url", versionedURL, "from", prev, "to", c.getAPIVersion())
+				continue
+			}
+		}
+		break
+	}
 	if err != nil {
 		c.metrics.RecordRequest(method, url, time.Since(start), false)
 		c.metrics.RecordError("network_error")
@@ -598,20 +751,23 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 	if !ok {
 		c.metrics.RecordRequest(method, url, duration, false)
 		c.metrics.RecordError("parse_error")
-		c.isAlive = false
+		c.isAlive.Store(false)
 		return nil, pkgerrors.New("failed to parse response")
 	}
 
 	if resp.IsSuccess() && r.Success {
 		c.metrics.RecordRequest(method, url, duration, true)
-		c.isAlive = true
+		c.isAlive.Store(true)
 		return &r, nil
 	}
 
 	c.handleAPIError(&r)
 
 	if resp.IsSuccess() && !r.Success {
-		c.logger.Warn("API returned success=false despite HTTP 200",
+		// handleAPIError (above) already classifies and logs the specific error;
+		// this is redundant diagnostic detail, so keep it at debug. A genuine,
+		// unrecovered failure still surfaces via the retry-exhaustion error path.
+		c.logger.Debug("API returned success=false despite HTTP 200",
 			"method", method, "url", url, "errorCode", r.ErrorCode, "dataName", r.DataName)
 
 		if r.ErrorCode == API_ERRORS["API_ERROR_VEHICLE_SETUP"] {
@@ -619,15 +775,18 @@ func (c *Client) executeOnce(method string, url string, params map[string]string
 		}
 
 		c.metrics.RecordRequest(method, url, duration, false)
-		c.isAlive = false
+		c.isAlive.Store(false)
 		if r.ErrorCode != "" {
-			return nil, APIError{Code: r.ErrorCode, Message: fmt.Sprintf("API request failed: %s", r.ErrorCode), Retryable: true}
+			// Map the wire code to a typed error (NegativeAckError, PINLockedError,
+			// retryable APIError, etc.) so callers can use errors.As/Is. The retry
+			// layer keys off APIError.Code/Retryable, both preserved by ParseAPIError.
+			return nil, ParseAPIError(r.ErrorCode)
 		}
 		return nil, APIError{Code: "API_SUCCESS_FALSE", Message: "API request failed with success=false", Retryable: true}
 	}
 
 	c.metrics.RecordRequest(method, url, duration, false)
-	c.isAlive = false
+	c.isAlive.Store(false)
 	return nil, pkgerrors.Errorf("request failed with status %s", resp.Status())
 }
 
@@ -660,7 +819,7 @@ func (c *Client) validateSession() bool {
 	c.logger.Debug("http request output", "request", "validateSession", "body", resp)
 
 	if resp.Success {
-		if _, err := c.SelectVehicle(c.currentVin); err == nil {
+		if _, err := c.SelectVehicle(c.getCurrentVin()); err == nil {
 			return true
 		} else {
 			errMsg := err.Error()
@@ -685,11 +844,13 @@ func (c *Client) reauthenticateAndSelect() bool {
 	}
 
 	// Ensure we have a VIN to select. Fall back to the first known VIN after auth.
-	if c.currentVin == "" && len(c.listOfVins) > 0 {
-		c.currentVin = c.listOfVins[0]
+	if c.getCurrentVin() == "" {
+		if vins := c.getVins(); len(vins) > 0 {
+			c.setCurrentVin(vins[0])
+		}
 	}
 
-	if _, err := c.SelectVehicle(c.currentVin); err != nil {
+	if _, err := c.SelectVehicle(c.getCurrentVin()); err != nil {
 		c.logger.Error("error while selecting vehicle", "request", "validateSession", "error", err.Error())
 		return false
 	}
@@ -702,9 +863,10 @@ func (c *Client) Authenticate() (bool, error, bool) {
 	// Try to authenticate
 	ok, err := c.auth()
 
-	// If authentication failed and the error indicates device is not registered,
-	// return the 2FA required flag
-	if !ok && err != nil && (strings.Contains(err.Error(), "device is not registered") || strings.Contains(err.Error(), "error while executing auth request")) {
+	// If authentication failed because the device is not registered, signal that
+	// 2FA/device registration is required. (Transport/parse errors are NOT treated
+	// as 2FA-required — they are genuine failures.)
+	if !ok && errors.Is(err, ErrDeviceNotRegistered) {
 		return false, err, true // Device registration required
 	}
 

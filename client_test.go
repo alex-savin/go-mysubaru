@@ -7,10 +7,71 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/alex-savin/go-mysubaru/config"
 )
+
+// TestClientStateConcurrentAccess exercises the Client session-state accessors:
+// a re-auth rewriting currentVin/listOfVins and the atomic auth flags
+// concurrently with readers must not trip the race detector. Run with -race.
+func TestClientStateConcurrentAccess(t *testing.T) {
+	c := &Client{}
+	c.setVins([]string{"VIN0000000000001"})
+
+	var wg sync.WaitGroup
+	const iterations = 300
+	for i := 0; i < iterations; i++ {
+		wg.Add(5)
+		go func() { defer wg.Done(); c.setVins([]string{"VIN0000000000002", "VIN0000000000003"}) }()
+		go func() { defer wg.Done(); _ = c.getVins() }()
+		go func() { defer wg.Done(); _ = c.getCurrentVin() }()
+		go func() { defer wg.Done(); _ = c.hasVin("VIN0000000000002") }()
+		go func() { defer wg.Done(); c.isAuthenticated.Store(true); _ = c.isAlive.Load() }()
+	}
+	wg.Wait()
+}
+
+func TestAPIVersionBump(t *testing.T) {
+	c := &Client{}
+	v := "/g2v33"
+	c.apiVer.Store(&v)
+
+	if got := c.getAPIVersion(); got != "/g2v33" {
+		t.Fatalf("getAPIVersion = %q, want /g2v33", got)
+	}
+	// Versioned path keeps the current version; non-versioned path is untouched.
+	if got := c.applyAPIVersion("/g2v33/service/x.json"); got != "/g2v33/service/x.json" {
+		t.Errorf("applyAPIVersion = %q, want /g2v33/service/x.json", got)
+	}
+	if got := c.applyAPIVersion("/login"); got != "/login" {
+		t.Errorf("applyAPIVersion rewrote a non-versioned path: %q", got)
+	}
+
+	// One bump: /g2v33 -> /g2v34, and stale prefixes get rewritten to current.
+	if !c.bumpAPIVersion() {
+		t.Fatal("first bump should succeed")
+	}
+	if got := c.getAPIVersion(); got != "/g2v34" {
+		t.Fatalf("after bump getAPIVersion = %q, want /g2v34", got)
+	}
+	if got := c.applyAPIVersion("/g2v33/service/x.json"); got != "/g2v34/service/x.json" {
+		t.Errorf("applyAPIVersion after bump = %q, want /g2v34/service/x.json", got)
+	}
+
+	// Bumping stops at the retry limit (apiVersionRetryLimit total).
+	bumps := 1
+	for c.bumpAPIVersion() {
+		bumps++
+		if bumps > apiVersionRetryLimit+5 {
+			t.Fatal("bumpAPIVersion never returned false; missing retry cap")
+		}
+	}
+	if bumps != apiVersionRetryLimit {
+		t.Errorf("total successful bumps = %d, want %d", bumps, apiVersionRetryLimit)
+	}
+}
 
 func mockConfig(t *testing.T) *config.Config {
 	return &config.Config{
@@ -194,8 +255,8 @@ func TestNew_Success(t *testing.T) {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "1HGCM82633A004352" {
 		t.Errorf("expected currentVin 1HGCM82633A004352, got %v", msc.currentVin)
@@ -232,8 +293,8 @@ func TestNew_MultiCarSuccess(t *testing.T) {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "JF2ABCDE6L0000001" {
 		t.Errorf("expected currentVin JF2ABCDE6L0000001, got %v", msc.currentVin)
@@ -255,8 +316,8 @@ func TestNew_MultiCarSuccess(t *testing.T) {
 // 	if client != nil {
 // 		t.Fatalf("expected nil client, got %v", client)
 // 	}
-// 	if client.isAuthenticated || client.isRegistered {
-// 		t.Errorf("expected authenticated and registered false, got %v %v", client.isAuthenticated, client.isRegistered)
+// 	if client.isAuthenticated.Load() || client.isRegistered.Load() {
+// 		t.Errorf("expected authenticated and registered false, got %v %v", client.isAuthenticated.Load(), client.isRegistered.Load())
 // 	}
 // 	if client.currentVin != "" {
 // 		t.Errorf("expected currentVin empty, got %v", client.currentVin)
