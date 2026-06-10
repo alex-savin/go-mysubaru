@@ -102,10 +102,34 @@ func IsPINLockedError(err error) bool {
 	return errors.As(err, &pinErr)
 }
 
+// IsSessionError reports whether err indicates an expired/invalid session or
+// token — i.e. a condition that warrants re-authentication. It recognizes the
+// typed APIError codes (InvalidToken, INVALID_SESSION, EWC_NoSessionId,
+// SESSION_EXPIRED), including the ErrSessionExpired/ErrInvalidSession sentinels.
+func IsSessionError(err error) bool {
+	var apiErr APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.Code {
+	case API_ERRORS["API_ERROR_INVALID_TOKEN"],
+		API_ERRORS["API_ERROR_INVALID_SESSION"],
+		API_ERRORS["API_ERROR_NO_SESSION_ID"],
+		ErrSessionExpired.Code:
+		return true
+	default:
+		return false
+	}
+}
+
 // ParseAPIError converts an error code string to the appropriate error type
 func ParseAPIError(errorCode string) error {
 	switch errorCode {
 	// Session/Authentication errors
+	case API_ERRORS["API_ERROR_INVALID_TOKEN"]:
+		// Retryable, and the Code is preserved so executeWithRetry recognizes it
+		// and re-authenticates before retrying.
+		return APIError{Code: API_ERRORS["API_ERROR_INVALID_TOKEN"], Message: "Session token is invalid", Retryable: true}
 	case API_ERRORS["API_ERROR_INVALID_CREDENTIALS"]:
 		return ErrInvalidCredentials
 	case API_ERRORS["API_ERROR_ACCOUNT_LOCKED"]:
@@ -174,7 +198,9 @@ func ParseAPIError(errorCode string) error {
 		return ErrDeviceNotAuth
 
 	default:
-		return APIError{Code: errorCode, Message: "Unknown API error: " + errorCode, Retryable: false}
+		// Unknown server-side error codes are treated as retryable, matching the
+		// transport's historical behavior (transient failures should be retried).
+		return APIError{Code: errorCode, Message: "Unknown API error: " + errorCode, Retryable: true}
 	}
 }
 
@@ -252,10 +278,8 @@ func (r *Response) parse(b []byte, logger *slog.Logger) (*Response, error) {
 
 // getAPIErrorMessage looks up the error message for a given API error code.
 func getAPIErrorMessage(errorCode string) string {
-	for key, msg := range apiErrorMessages {
-		if API_ERRORS[key] == errorCode {
-			return msg
-		}
+	if symbol, ok := wireToSymbol[errorCode]; ok {
+		return apiErrorMessages[symbol]
 	}
 	return ""
 }

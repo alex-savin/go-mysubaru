@@ -95,8 +95,8 @@ func TestNewWithFixtures_SingleCar(t *testing.T) {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "JF2ABCDE6L0000001" {
 		t.Errorf("expected currentVin JF2ABCDE6L0000001, got %v", msc.currentVin)
@@ -137,8 +137,8 @@ func TestNewWithFixtures_MultiCar(t *testing.T) {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "JF2ABCDE6L0000001" {
 		t.Errorf("expected currentVin JF2ABCDE6L0000001, got %v", msc.currentVin)

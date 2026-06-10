@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -81,19 +82,32 @@ type Vehicle struct {
 	}
 	Updated time.Time
 	client  *Client
+
+	// mu guards concurrent access to this vehicle's mutable state (the maps,
+	// GeoLocation, EVStatus, Updated, etc.). Polling, location updates, and
+	// command handlers run on independent goroutines and all touch the same
+	// Vehicle, so reads (MarshalJSON) take RLock and writes take Lock. It is an
+	// unexported value field, so it is never serialized and the zero value is
+	// ready to use.
+	mu sync.RWMutex
 }
 
 // MarshalJSON provides custom JSON serialization for Vehicle.
 // It includes a computed "EV" field for backwards compatibility with clients
 // that check this field to determine if the vehicle is electric.
-func (v Vehicle) MarshalJSON() ([]byte, error) {
+func (v *Vehicle) MarshalJSON() ([]byte, error) {
 	type VehicleAlias Vehicle // Alias to avoid infinite recursion
 
+	// RLock for a consistent read while concurrent pollers/commands may be
+	// mutating this vehicle. Embed a *pointer* alias so the lock is never
+	// copied (which would defeat the lock and trip go vet's copylocks check).
+	v.mu.RLock()
+	defer v.mu.RUnlock()
 	return json.Marshal(&struct {
-		VehicleAlias
+		*VehicleAlias
 		EV bool `json:"EV"` // Computed field for backwards compatibility
 	}{
-		VehicleAlias: VehicleAlias(v),
+		VehicleAlias: (*VehicleAlias)(v),
 		EV:           slices.Contains(v.Features, FEATURE_PHEV),
 	})
 }
@@ -182,6 +196,8 @@ func normalizeClimateProfile(rp map[string]any) ClimateProfile {
 }
 
 func (v *Vehicle) String() string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
 	var vString string
 	vString += "=== INFORMATION =====================\n"
 	vString += "Nickname: " + v.CarNickname + "\n"
@@ -268,13 +284,7 @@ func (v *Vehicle) Lock() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + urlToGen(apiURLs["API_LOCK"], v.getAPIGen())
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // Unlock
@@ -288,13 +298,7 @@ func (v *Vehicle) Unlock() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + urlToGen(apiURLs["API_UNLOCK"], v.getAPIGen())
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // EngineStart
@@ -343,7 +347,10 @@ func (v *Vehicle) EngineStartWithProfile(run, delay int, horn bool, profileName 
 
 	// Apply profile overrides if present
 	if profileName != "" {
-		if cp, ok := v.ClimateProfiles[profileName]; ok {
+		v.mu.RLock()
+		cp, ok := v.ClimateProfiles[profileName]
+		v.mu.RUnlock()
+		if ok {
 			applyClimateProfile(params, cp)
 		}
 	}
@@ -351,13 +358,7 @@ func (v *Vehicle) EngineStartWithProfile(run, delay int, horn bool, profileName 
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_REMOTE_ENGINE_START"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // applyClimateProfile applies climate profile settings to the params map.
@@ -404,13 +405,7 @@ func (v *Vehicle) EngineStop() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_REMOTE_ENGINE_STOP"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // LightsStart
@@ -426,13 +421,7 @@ func (v *Vehicle) LightsStart() (chan string, error) {
 		pollingUrl = MOBILE_API_VERSION + apiURLs["API_G1_HORN_LIGHTS_STATUS"]
 	}
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // LightsStop
@@ -448,13 +437,7 @@ func (v *Vehicle) LightsStop() (chan string, error) {
 		pollingUrl = MOBILE_API_VERSION + apiURLs["API_G1_HORN_LIGHTS_STATUS"]
 	}
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // HornStart
@@ -470,13 +453,7 @@ func (v *Vehicle) HornStart() (chan string, error) {
 		pollingUrl = MOBILE_API_VERSION + apiURLs["API_G1_HORN_LIGHTS_STATUS"]
 	}
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // HornStop
@@ -492,13 +469,7 @@ func (v *Vehicle) HornStop() (chan string, error) {
 		pollingUrl = MOBILE_API_VERSION + apiURLs["API_G1_HORN_LIGHTS_STATUS"]
 	}
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // LockCancel
@@ -511,13 +482,7 @@ func (v *Vehicle) LockCancel() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + urlToGen(apiURLs["API_LOCK_CANCEL"], v.getAPIGen())
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // UnlockCancel
@@ -530,13 +495,7 @@ func (v *Vehicle) UnlockCancel() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + urlToGen(apiURLs["API_UNLOCK_CANCEL"], v.getAPIGen())
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // EngineStartCancel
@@ -549,13 +508,7 @@ func (v *Vehicle) EngineStartCancel() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_REMOTE_ENGINE_START_CANCEL"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // LightsCancel
@@ -571,13 +524,7 @@ func (v *Vehicle) LightsCancel() (chan string, error) {
 		pollingUrl = MOBILE_API_VERSION + apiURLs["API_G1_HORN_LIGHTS_STATUS"]
 	}
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // HornLightsCancel
@@ -593,13 +540,7 @@ func (v *Vehicle) HornLightsCancel() (chan string, error) {
 		pollingUrl = MOBILE_API_VERSION + apiURLs["API_G1_HORN_LIGHTS_STATUS"]
 	}
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // ChargeOn
@@ -617,13 +558,7 @@ func (v *Vehicle) ChargeOn() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_EV_CHARGE_NOW"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // GetEVChargeSettings
@@ -661,20 +596,10 @@ func (v *Vehicle) SaveEVChargeSettings(settings map[string]string) error {
 		return errors.New("vehicle is not an EV")
 	}
 
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != v.client.currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_EV_SAVE_CHARGE_SETTINGS"]
 	resp, err := v.client.execute(POST, reqUrl, settings, true)
@@ -696,20 +621,10 @@ func (v *Vehicle) DeleteEVChargeSchedule(scheduleID string) error {
 		return errors.New("vehicle is not an EV")
 	}
 
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != v.client.currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 
 	params := map[string]string{
 		"scheduleId": scheduleID,
@@ -732,6 +647,15 @@ func (v *Vehicle) DeleteEVChargeSchedule(scheduleID string) error {
 // If force is false, it reports the last known location from Subaru's records.
 // Returns a channel that will receive status updates about the location request.
 func (v *Vehicle) GetLocation(force bool) (chan string, error) {
+	// Validate (and quietly refresh) the session before executing, matching every
+	// other status/command method. Without this, the locate request fires with a
+	// token that may have expired since the last poll, producing an InvalidToken
+	// round-trip — and a re-auth+retry — on every location poll.
+	if !v.client.validateSession() {
+		v.client.logger.Error("session is not valid; re-authentication required")
+		return nil, ErrSessionExpired
+	}
+
 	var reqUrl, pollingUrl string
 	var params map[string]string
 	if force { // Sends a locate command to the vehicle to get real time position
@@ -751,12 +675,7 @@ func (v *Vehicle) GetLocation(force bool) (chan string, error) {
 		reqUrl = MOBILE_API_VERSION + urlToGen(apiURLs["API_LOCATE"], v.getAPIGen())
 	}
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // GetClimatePresets connects to the MySubaru API to download available climate presets.
@@ -786,28 +705,20 @@ func (v *Vehicle) GetClimatePresets() error {
 		return err
 	}
 
+	v.mu.Lock()
 	v.processClimateProfiles(cProfiles)
 	v.Updated = time.Now()
+	v.mu.Unlock()
 	return nil
 }
 
 // GetClimateQuickPresets
 // Used while user uses "quick start engine" button in the app
 func (v *Vehicle) GetClimateQuickPresets() error {
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != (v.client).currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_FETCH_RES_QUICK_START_SETTINGS"]
 	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
 	if err != nil {
@@ -837,8 +748,10 @@ func (v *Vehicle) GetClimateQuickPresets() error {
 	re := regexp.MustCompile(`([A-Z])`)
 	cpn := strings.ToLower("quick_" + re.ReplaceAllString(cp.PresetType, "_$1") + "_" + strings.ReplaceAll(cp.Name, " ", "_"))
 
+	v.mu.Lock()
 	v.ClimateProfiles[cpn] = cp
 	v.Updated = time.Now()
+	v.mu.Unlock()
 	return nil
 }
 
@@ -846,20 +759,10 @@ func (v *Vehicle) GetClimateQuickPresets() error {
 // Updates the quick climate presets by fetching them from the MySubaru API.
 // {"success":true,"data":null}
 func (v *Vehicle) UpdateClimateQuickPresets() error {
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != (v.client).currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 
 	params := map[string]string{
 		"name":                      "Cooling",
@@ -886,20 +789,10 @@ func (v *Vehicle) UpdateClimateQuickPresets() error {
 // GetClimateUserPresets retrieves user-defined climate presets from the MySubaru API.
 // These are custom presets created by the user through the Subaru app.
 func (v *Vehicle) GetClimateUserPresets() error {
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != (v.client).currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_FETCH_RES_USER_PRESETS"]
 	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
 	if err != nil {
@@ -928,28 +821,20 @@ func (v *Vehicle) GetClimateUserPresets() error {
 		profiles = append(profiles, normalizeClimateProfile(rp))
 	}
 
+	v.mu.Lock()
 	v.processClimateProfiles(profiles)
 	v.Updated = time.Now()
+	v.mu.Unlock()
 	return nil
 }
 
 // UpdateClimateUserPresets
 // Updates the user's climate presets by fetching them from the MySubaru API.
 func (v *Vehicle) UpdateClimateUserPresets() error {
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != (v.client).currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 	params := map[string]string{
 		"presetType":                "userPreset",
 		"name":                      "Cooling",
@@ -988,11 +873,11 @@ func (v *Vehicle) SaveClimateUserPresets(presets []ClimateProfile) error {
 
 	// Validate session before executing the request
 	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
+		v.client.logger.Error("session is not valid; re-authentication required")
+		return ErrSessionExpired
 	}
 
-	if v.Vin != v.client.currentVin {
+	if v.Vin != v.client.getCurrentVin() {
 		v.selectVehicle()
 	}
 
@@ -1016,10 +901,11 @@ func (v *Vehicle) SaveClimateUserPresets(presets []ClimateProfile) error {
 	}
 
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SAVE_RES_SETTINGS"]
-	resp, err := v.client.httpClient.R().
+	httpClient := v.client.httpC()
+	resp, err := httpClient.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(presetsJSON).
-		Post(v.client.httpClient.BaseURL() + reqUrl)
+		Post(httpClient.BaseURL() + reqUrl)
 	if err != nil {
 		v.client.logger.Error("error saving climate presets", "error", err.Error())
 		return err
@@ -1124,8 +1010,14 @@ func (v *Vehicle) GetVehicleStatus() error {
 	var vs VehicleStatus
 	if err = json.Unmarshal(resp.Data, &vs); err != nil {
 		v.client.logger.Error("error while parsing json", "request", "GetVehicleStatus", "error", err.Error())
+		return err
 	}
 
+	// Guard the in-memory mutations against concurrent pollers/marshalers.
+	// ensureVehicleSelected and the HTTP request above run outside this lock
+	// (they take the lock separately or not at all), so there is no re-entry.
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.updateVehicleFromStatus(&vs)
 	v.updateEVStatusFromStatus(&vs)
 
@@ -1175,20 +1067,10 @@ func isBadValue(val any) bool {
 // GetVehicleCondition retrieves the current condition/status of various vehicle components
 // such as doors, windows, and tires from the MySubaru API.
 func (v *Vehicle) GetVehicleCondition() error {
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != (v.client).currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 	reqUrl := MOBILE_API_VERSION + urlToGen(apiURLs["API_CONDITION"], v.getAPIGen())
 	resp, err := v.client.execute(GET, reqUrl, map[string]string{}, false)
 	if err != nil {
@@ -1215,8 +1097,13 @@ func (v *Vehicle) GetVehicleCondition() error {
 	err = json.Unmarshal(sr.Result, &vc)
 	if err != nil {
 		v.client.logger.Error("error while parsing json", "request", "GetVehicleCondition", "error", err.Error())
+		return err
 	}
 	// v.client.logger.Debug("http request output", "request", "GetVehicleCondition", "body", resp)
+
+	// Guard the in-memory mutations against concurrent pollers/marshalers.
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	// Parse EV-specific fields if this is an EV
 	if v.IsEV() {
@@ -1283,6 +1170,8 @@ func (v *Vehicle) GetVehicleHealth() error {
 	}
 	// v.client.logger.Debug("http request output", "request", "GetVehicleHealth", "vehicle health", vh)
 
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	for i, vhi := range vh.VehicleHealthItems {
 		// v.client.logger.Debug("vehicle health item", "id", i, "item", vhi)
 		if vhi.IsTrouble {
@@ -1310,6 +1199,22 @@ func (v *Vehicle) GetFeaturesList() {
 	}
 }
 
+// actuate launches a remote service request on its own goroutine and returns a
+// channel that receives the service state transitions ("started", "stopping",
+// "finished", "error"). It centralizes the goroutine/channel lifecycle shared by
+// every remote command (lock, unlock, engine, horn/lights, fences, etc.).
+func (v *Vehicle) actuate(params map[string]string, reqUrl, pollingUrl string) (chan string, error) {
+	// Buffer for every possible state emission (one per polling attempt) so the
+	// goroutine never blocks on send — even if the caller stops draining after
+	// its own timeout — which would otherwise leak the goroutine.
+	ch := make(chan string, MaxServiceRequestAttempts+1)
+	go func() {
+		defer close(ch)
+		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
+	}()
+	return ch, nil
+}
+
 // executeServiceRequest
 // Executes a service request to the Subaru API and handles the response.
 func (v *Vehicle) executeServiceRequest(params map[string]string, reqUrl, pollingUrl string, ch chan string, attempt int) error {
@@ -1319,21 +1224,13 @@ func (v *Vehicle) executeServiceRequest(params map[string]string, reqUrl, pollin
 		return errors.New("maximum attempts reached for service request")
 	}
 
-	// Check if the vehicle has a valid subscription for remote services
-	if !v.getRemoteOptionsStatus() {
-		v.client.logger.Error(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
-		return errors.New(APP_ERRORS["SUBSCRIPTION_REQUIRED"])
+	// Check subscription + session. On failure, emit a terminal state so a caller
+	// blocked on the channel sees the failure instead of a silent empty close.
+	if err := v.validateSubscriptionAndSession(); err != nil {
+		ch <- "error"
+		return err
 	}
-
-	// Validate session before executing the request
-	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
-	}
-
-	if v.Vin != v.client.currentVin {
-		v.selectVehicle()
-	}
+	v.ensureVehicleSelected()
 
 	var resp *Response
 	var err error
@@ -1400,11 +1297,13 @@ func (v *Vehicle) parseServiceRequest(b []byte) (ServiceRequest, bool) {
 // selectVehicle selects this vehicle in the client's session if it's not already selected.
 // This ensures that subsequent API calls operate on the correct vehicle.
 func (v *Vehicle) selectVehicle() {
-	if v.client.currentVin != v.Vin {
+	if v.client.getCurrentVin() != v.Vin {
 		vData, err := (v.client).SelectVehicle(v.Vin)
-		if err != nil {
-			v.client.logger.Debug("cannot get vehicle data")
+		if err != nil || vData == nil {
+			v.client.logger.Debug("cannot get vehicle data", "vin", v.Vin, "error", err)
+			return
 		}
+		v.mu.Lock()
 		v.SubscriptionStatus = vData.SubscriptionStatus
 		v.GeoLocation.Latitude = vData.VehicleGeoPosition.Latitude
 		v.GeoLocation.Longitude = vData.VehicleGeoPosition.Longitude
@@ -1412,6 +1311,7 @@ func (v *Vehicle) selectVehicle() {
 		v.GeoLocation.Speed = vData.VehicleGeoPosition.Speed
 		v.GeoLocation.Updated = vData.VehicleGeoPosition.Timestamp
 		v.Updated = time.Now()
+		v.mu.Unlock()
 	}
 }
 
@@ -1496,6 +1396,62 @@ func (v *Vehicle) applyDoorValue(d *Door, fieldType string, value any) {
 	case "LockStatus":
 		d.Lock = normalized
 	}
+}
+
+// SetDoorLocks optimistically sets the lock state of all known doors. It is
+// used to reflect a confirmed remote lock/unlock command immediately, before
+// the next status poll. Subaru only reports door lock status for some vehicles;
+// for those, a later status poll overwrites this with the authoritative value,
+// while for vehicles that never report lock status the value set here is
+// preserved (GetVehicleStatus skips empty/UNKNOWN/NOT_EQUIPPED lock fields).
+// It is safe for concurrent use.
+func (v *Vehicle) SetDoorLocks(locked bool) {
+	lockState := "UNLOCKED"
+	if locked {
+		lockState = "LOCKED"
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	for name, d := range v.Doors {
+		d.Lock = lockState
+		d.Updated = time.Now()
+		v.Doors[name] = d
+	}
+}
+
+// DoorLocks returns a snapshot copy of each door's reported lock state
+// (e.g. "LOCKED"/"UNLOCKED"); doors with no reported lock value are omitted.
+// It is safe for concurrent use.
+func (v *Vehicle) DoorLocks() map[string]string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	out := make(map[string]string, len(v.Doors))
+	for name, d := range v.Doors {
+		if d.Lock != "" {
+			out[name] = d.Lock
+		}
+	}
+	return out
+}
+
+// LockState reports the aggregate door lock state. known is false when no door
+// reports a usable lock value (e.g. the vehicle does not support lock status);
+// otherwise locked is true only if every door reporting a value is LOCKED. It
+// is safe for concurrent use.
+func (v *Vehicle) LockState() (locked bool, known bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	for _, d := range v.Doors {
+		val := strings.ToUpper(strings.TrimSpace(d.Lock))
+		if val == "" || val == "UNKNOWN" || val == "NOT_EQUIPPED" {
+			continue
+		}
+		known = true
+		if val != "LOCKED" {
+			return false, true
+		}
+	}
+	return known, known
 }
 
 // parseWindow handles window-specific parsing logic.
@@ -1593,13 +1549,7 @@ func (v *Vehicle) SetGeoFence(latitude, longitude float64, radius int, name stri
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // UpdateGeoFence updates an existing geofence with new parameters.
@@ -1648,13 +1598,7 @@ func (v *Vehicle) UpdateGeoFence(fenceId string, latitude, longitude float64, ra
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // DeleteGeoFence removes a geofence from the vehicle.
@@ -1679,13 +1623,7 @@ func (v *Vehicle) DeleteGeoFence(fenceId string) (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // GetGeoFenceStatus retrieves the current status of all geofences for the vehicle.
@@ -1736,13 +1674,7 @@ func (v *Vehicle) SetSpeedFence(speedLimit int, enabled, persistent bool) (chan 
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // SetCurfew sets up a curfew for the vehicle.
@@ -1791,13 +1723,7 @@ func (v *Vehicle) SetCurfew(startTime, endTime string, daysOfWeek []int, enabled
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // validateSubscriptionAndSession checks if the vehicle has remote options and validates the session
@@ -1808,8 +1734,8 @@ func (v *Vehicle) validateSubscriptionAndSession() error {
 	}
 
 	if !v.client.validateSession() {
-		v.client.logger.Error(APP_ERRORS["SESSION_EXPIRED"])
-		return errors.New(APP_ERRORS["SESSION_EXPIRED"])
+		v.client.logger.Error("session is not valid; re-authentication required")
+		return ErrSessionExpired
 	}
 
 	return nil
@@ -1817,7 +1743,7 @@ func (v *Vehicle) validateSubscriptionAndSession() error {
 
 // ensureVehicleSelected ensures the current vehicle is selected in the client
 func (v *Vehicle) ensureVehicleSelected() {
-	if v.Vin != v.client.currentVin {
+	if v.Vin != v.client.getCurrentVin() {
 		v.selectVehicle()
 	}
 }
@@ -2057,13 +1983,7 @@ func (v *Vehicle) ValetModeStart() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_MODE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // ValetModeStop disables valet mode on the vehicle
@@ -2077,13 +1997,7 @@ func (v *Vehicle) ValetModeStop() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_MODE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // SaveValetModeSettings saves custom valet mode settings
@@ -2097,13 +2011,7 @@ func (v *Vehicle) SaveValetModeSettings(settings ValetModeSettings) (chan string
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_VALET_SETTINGS_SAVE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // =============================================================================
@@ -2184,13 +2092,7 @@ func (v *Vehicle) ActivateGeoFence() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // DeactivateGeoFence deactivates the geo-fence alert on the vehicle
@@ -2203,13 +2105,7 @@ func (v *Vehicle) DeactivateGeoFence() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_GEOFENCE_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // =============================================================================
@@ -2280,13 +2176,7 @@ func (v *Vehicle) ActivateSpeedFence() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // DeactivateSpeedFence deactivates the speed fence alert on the vehicle
@@ -2299,13 +2189,7 @@ func (v *Vehicle) DeactivateSpeedFence() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_SPEEDFENCE_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // =============================================================================
@@ -2383,13 +2267,7 @@ func (v *Vehicle) ActivateCurfew() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // DeactivateCurfew deactivates the curfew alert on the vehicle
@@ -2402,13 +2280,7 @@ func (v *Vehicle) DeactivateCurfew() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_CURFEW_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // =============================================================================
@@ -2462,13 +2334,7 @@ func (v *Vehicle) TripLogStart() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_TRIPLOG_COMMAND"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // TripLogStop stops trip logging on the vehicle
@@ -2481,13 +2347,7 @@ func (v *Vehicle) TripLogStop() (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_TRIPLOG_COMMAND"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_REMOTE_SVC_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // DeleteTrip deletes a trip log by ID
@@ -2553,13 +2413,7 @@ func (v *Vehicle) SendPOI(poi POI) (chan string, error) {
 	reqUrl := MOBILE_API_VERSION + apiURLs["API_G2_SEND_POI"]
 	pollingUrl := MOBILE_API_VERSION + apiURLs["API_G2_SEND_POI_STATUS"]
 
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		v.executeServiceRequest(params, reqUrl, pollingUrl, ch, 1)
-	}()
-
-	return ch, nil
+	return v.actuate(params, reqUrl, pollingUrl)
 }
 
 // GetFavoritePOIs retrieves the list of favorite POIs saved for the vehicle

@@ -4,8 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 )
+
+// TestVehicleConcurrentAccess exercises the per-Vehicle lock: concurrent door
+// mutations (SetDoorLocks), aggregate reads (LockState/DoorLocks) and
+// serialization (MarshalJSON) must not trip the race detector. Run with -race.
+func TestVehicleConcurrentAccess(t *testing.T) {
+	v := &Vehicle{
+		Vin: "RACE123",
+		Doors: map[string]Door{
+			"door_front_left":  {Position: "front", SubPosition: "left", Lock: "LOCKED"},
+			"door_front_right": {Position: "front", SubPosition: "right", Lock: "LOCKED"},
+			"door_rear_left":   {Position: "rear", SubPosition: "left", Lock: "LOCKED"},
+			"door_rear_right":  {Position: "rear", SubPosition: "right", Lock: "LOCKED"},
+		},
+	}
+
+	var wg sync.WaitGroup
+	const iterations = 200
+	for i := 0; i < iterations; i++ {
+		wg.Add(4)
+		go func(n int) { defer wg.Done(); v.SetDoorLocks(n%2 == 0) }(i)
+		go func() { defer wg.Done(); _, _ = json.Marshal(v) }()
+		go func() { defer wg.Done(); _, _ = v.LockState() }()
+		go func() { defer wg.Done(); _ = v.DoorLocks() }()
+	}
+	wg.Wait()
+}
 
 // TestGetClimateQuickPresets_Success tests the retrieval of quick climate presets.
 func TestGetClimatePresets_Success(t *testing.T) {
@@ -54,8 +81,8 @@ func TestGetClimatePresets_Success(t *testing.T) {
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "1HGCM82633A004352" {
 		t.Errorf("expected currentVin 1HGCM82633A004352, got %v", msc.currentVin)
@@ -109,8 +136,8 @@ func TestGetClimateQuickPresets_Success(t *testing.T) {
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "1HGCM82633A004352" {
 		t.Errorf("expected currentVin 1HGCM82633A004352, got %v", msc.currentVin)
@@ -164,8 +191,8 @@ func TestGetClimateUserPresets_Success(t *testing.T) {
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "1HGCM82633A004352" {
 		t.Errorf("expected currentVin 1HGCM82633A004352, got %v", msc.currentVin)
@@ -219,8 +246,8 @@ func TestGetVehicleStatus_Success(t *testing.T) {
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "1HGCM82633A004352" {
 		t.Errorf("expected currentVin 1HGCM82633A004352, got %v", msc.currentVin)
@@ -254,8 +281,8 @@ func TestGetVehicleCondition_Success(t *testing.T) {
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "1HGCM82633A004352" {
 		t.Errorf("expected currentVin 1HGCM82633A004352, got %v", msc.currentVin)
@@ -309,8 +336,8 @@ func TestGetVehicleHealth_Success(t *testing.T) {
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
-	if !msc.isAuthenticated || !msc.isRegistered {
-		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated, msc.isRegistered)
+	if !msc.isAuthenticated.Load() || !msc.isRegistered.Load() {
+		t.Errorf("expected authenticated and registered true, got %v %v", msc.isAuthenticated.Load(), msc.isRegistered.Load())
 	}
 	if msc.currentVin != "1HGCM82633A004352" {
 		t.Errorf("expected currentVin 1HGCM82633A004352, got %v", msc.currentVin)
