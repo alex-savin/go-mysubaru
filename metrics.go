@@ -3,7 +3,7 @@ package mysubaru
 import (
 	"time"
 
-	"github.com/alex-savin/go-mysubaru/config"
+	"github.com/alex-savin/go-mysubaru/v2/config"
 )
 
 // NoOpMetricsRecorder provides a no-op implementation of config.MetricsRecorder

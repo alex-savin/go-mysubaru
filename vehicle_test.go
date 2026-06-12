@@ -1,6 +1,7 @@
 package mysubaru
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -77,7 +78,7 @@ func TestGetClimatePresets_Success(t *testing.T) {
 		t.Fatalf("expected MySubaru API client, got nil")
 	}
 
-	_, authErr, _ := msc.Authenticate()
+	_, _, authErr := msc.Authenticate(context.Background())
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
@@ -132,7 +133,7 @@ func TestGetClimateQuickPresets_Success(t *testing.T) {
 		t.Fatalf("expected MySubaru API client, got nil")
 	}
 
-	_, authErr, _ := msc.Authenticate()
+	_, _, authErr := msc.Authenticate(context.Background())
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
@@ -187,7 +188,7 @@ func TestGetClimateUserPresets_Success(t *testing.T) {
 		t.Fatalf("expected MySubaru API client, got nil")
 	}
 
-	_, authErr, _ := msc.Authenticate()
+	_, _, authErr := msc.Authenticate(context.Background())
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
@@ -242,7 +243,7 @@ func TestGetVehicleStatus_Success(t *testing.T) {
 		t.Fatalf("expected MySubaru API client, got nil")
 	}
 
-	_, authErr, _ := msc.Authenticate()
+	_, _, authErr := msc.Authenticate(context.Background())
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
@@ -277,7 +278,7 @@ func TestGetVehicleCondition_Success(t *testing.T) {
 		t.Fatalf("expected MySubaru API client, got nil")
 	}
 
-	_, authErr, _ := msc.Authenticate()
+	_, _, authErr := msc.Authenticate(context.Background())
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
@@ -332,7 +333,7 @@ func TestGetVehicleHealth_Success(t *testing.T) {
 		t.Fatalf("expected MySubaru API client, got nil")
 	}
 
-	_, authErr, _ := msc.Authenticate()
+	_, _, authErr := msc.Authenticate(context.Background())
 	if authErr != nil {
 		t.Fatalf("expected no error, got %v", authErr)
 	}
@@ -436,12 +437,12 @@ func TestGetVehicleStatus_SkipsInvalidFuelPercent(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	vehicle, err := msc.GetVehicleByVin("1HGCM82633A004352")
+	vehicle, err := msc.GetVehicleByVin(context.Background(), "1HGCM82633A004352")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

@@ -2,13 +2,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
 
-	"github.com/alex-savin/go-mysubaru"
-	"github.com/alex-savin/go-mysubaru/config"
+	"github.com/alex-savin/go-mysubaru/v2"
+	"github.com/alex-savin/go-mysubaru/v2/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -92,8 +93,10 @@ func main() {
 		log.Fatal("Failed to create client:", err)
 	}
 
+	ctx := context.Background()
+
 	fmt.Println("🔑 Authenticating...")
-	ok, authErr, requires2FA := client.Authenticate()
+	ok, requires2FA, authErr := client.Authenticate(ctx)
 	if requires2FA {
 		log.Fatal("Device not registered; 2FA/verification required before proceeding")
 	}
@@ -104,7 +107,7 @@ func main() {
 
 	// Get vehicles
 	fmt.Println("🚗 Retrieving vehicles...")
-	vehicles, err := client.GetVehicles()
+	vehicles, err := client.GetVehicles(ctx)
 	if err != nil {
 		log.Fatal("Failed to get vehicles:", err)
 	}
@@ -121,7 +124,7 @@ func main() {
 
 	// Get vehicle status
 	fmt.Println("📊 Getting vehicle status...")
-	err = vehicle.GetVehicleStatus()
+	err = vehicle.GetVehicleStatus(ctx)
 	if err != nil {
 		log.Printf("Failed to get vehicle status: %v", err)
 	} else {
@@ -130,7 +133,7 @@ func main() {
 
 	// Get vehicle condition
 	fmt.Println("🔍 Getting vehicle condition...")
-	err = vehicle.GetVehicleCondition()
+	err = vehicle.GetVehicleCondition(ctx)
 	if err != nil {
 		log.Printf("Failed to get vehicle condition: %v", err)
 	} else {
@@ -139,7 +142,7 @@ func main() {
 
 	// Get vehicle health
 	fmt.Println("🏥 Getting vehicle health...")
-	err = vehicle.GetVehicleHealth()
+	err = vehicle.GetVehicleHealth(ctx)
 	if err != nil {
 		log.Printf("Failed to get vehicle health: %v", err)
 	} else {
@@ -151,7 +154,7 @@ func main() {
 
 	// Remote lock
 	// fmt.Println("🔒 Executing remote lock...")
-	// ch, err := vehicle.Lock()
+	// ch, err := vehicle.Lock(ctx)
 	// if err != nil {
 	// 	log.Printf("Remote lock failed: %v", err)
 	// } else {
@@ -161,7 +164,7 @@ func main() {
 
 	// Remote unlock
 	// fmt.Println("🔓 Executing remote unlock...")
-	// ch, err = vehicle.Unlock()
+	// ch, err = vehicle.Unlock(ctx)
 	// if err != nil {
 	// 	log.Printf("Remote unlock failed: %v", err)
 	// } else {
@@ -171,7 +174,7 @@ func main() {
 
 	// Horn and lights
 	// fmt.Println("🚨 Executing horn and lights...")
-	// ch, err = vehicle.HornStart()
+	// ch, err = vehicle.HornStart(ctx)
 	// if err != nil {
 	// 	log.Printf("Horn and lights failed: %v", err)
 	// } else {
@@ -184,7 +187,7 @@ func main() {
 
 	// Get climate presets
 	fmt.Println("🌡️ Getting climate presets...")
-	err = vehicle.GetClimatePresets()
+	err = vehicle.GetClimatePresets(ctx)
 	if err != nil {
 		log.Printf("Failed to get climate presets: %v", err)
 	} else {
@@ -193,7 +196,7 @@ func main() {
 
 	// Get user presets
 	fmt.Println("👤 Getting user climate presets...")
-	err = vehicle.GetClimateUserPresets()
+	err = vehicle.GetClimateUserPresets(ctx)
 	if err != nil {
 		log.Printf("Failed to get user presets: %v", err)
 	} else {
@@ -202,7 +205,7 @@ func main() {
 
 	// Get quick presets
 	fmt.Println("⚡ Getting quick presets...")
-	err = vehicle.GetClimateQuickPresets()
+	err = vehicle.GetClimateQuickPresets(ctx)
 	if err != nil {
 		log.Printf("Failed to get quick presets: %v", err)
 	} else {
@@ -215,7 +218,7 @@ func main() {
 
 		// Get EV charge settings
 		fmt.Println("🔋 Getting EV charge settings...")
-		err = vehicle.GetEVChargeSettings()
+		err = vehicle.GetEVChargeSettings(ctx)
 		if err != nil {
 			log.Printf("Failed to get EV settings: %v", err)
 		} else {
@@ -224,7 +227,7 @@ func main() {
 
 		// Start charging
 		fmt.Println("⚡ Starting EV charging...")
-		ch, err := vehicle.ChargeOn()
+		ch, err := vehicle.ChargeOn(ctx)
 		if err != nil {
 			log.Printf("EV charging failed: %v", err)
 		} else {
@@ -265,7 +268,7 @@ func main() {
 	// 	homeLng := -74.0060
 	// 	homeRadius := 500 // 500 meters
 
-	// 	ch, err := vehicle.SetGeoFence(homeLat, homeLng, homeRadius, "Home", true, true, true)
+	// 	ch, err := vehicle.SetGeoFence(ctx, homeLat, homeLng, homeRadius, "Home", true, true, true)
 	// 	if err != nil {
 	// 		log.Printf("Geofence setup failed: %v", err)
 	// 	} else {
@@ -275,7 +278,7 @@ func main() {
 
 	// 	// Set up speed fence
 	// 	fmt.Println("🚦 Setting up speed fence...")
-	// 	ch, err = vehicle.SetSpeedFence(65, true, true) // 65 mph limit
+	// 	ch, err = vehicle.SetSpeedFence(ctx, 65, true, true) // 65 mph limit
 	// 	if err != nil {
 	// 		log.Printf("Speed fence setup failed: %v", err)
 	// 	} else {
@@ -286,7 +289,7 @@ func main() {
 	// 	// Set up curfew
 	// 	fmt.Println("🌙 Setting up curfew...")
 	// 	daysOfWeek := []int{1, 2, 3, 4, 5} // Monday to Friday
-	// 	ch, err = vehicle.SetCurfew("22:00", "06:00", daysOfWeek, true)
+	// 	ch, err = vehicle.SetCurfew(ctx, "22:00", "06:00", daysOfWeek, true)
 	// 	if err != nil {
 	// 		log.Printf("Curfew setup failed: %v", err)
 	// 	} else {
@@ -301,7 +304,7 @@ func main() {
 	// 	// Example cleanup (commented out to avoid accidental deletion)
 	// 	/*
 	// 	   fmt.Println("🗑️  Cleaning up geofence...")
-	// 	   ch, err = vehicle.DeleteGeoFence("fence-id-here")
+	// 	   ch, err = vehicle.DeleteGeoFence(ctx, "fence-id-here")
 	// 	   if err != nil {
 	// 	       log.Printf("Geofence deletion failed: %v", err)
 	// 	   } else {

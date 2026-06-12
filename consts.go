@@ -10,18 +10,28 @@ package mysubaru
 // this only needs to track a recent known-good version.
 var MOBILE_API_VERSION = "/g2v33"
 
-var MOBILE_API_SERVER = map[string]string{
-	"USA":  "https://mobileapi.prod.subarucs.com",
-	"CAN":  "https://mobileapi.ca.prod.subarucs.com",
-	"TEST": "http://127.0.0.1:56765",
+// mobileAPIServer maps a region to its mobile-API host. Override per client
+// via config.MySubaru.BaseURL (e.g. for QA environments or test mocks).
+var mobileAPIServer = map[string]string{
+	"USA": "https://mobileapi.prod.subarucs.com",
+	"CAN": "https://mobileapi.ca.prod.subarucs.com",
 }
 
-var MOBILE_APP = map[string]string{
+// MICROSERVICE_API_SERVER hosts the JWT-only microservice endpoints (e.g.
+// /micro/vehicleattributes/...). Unlike the mobile API it is not versioned
+// with a /g2vNN prefix and requires an Authorization: Bearer token obtained
+// via the generateToken endpoint.
+var MICROSERVICE_API_SERVER = map[string]string{
+	"USA": "https://api.prod.subarucs.com",
+	"CAN": "https://api.prod.subarucs.com",
+}
+
+var mobileApp = map[string]string{
 	"USA": "com.subaru.telematics.app.remote",
 	"CAN": "ca.subaru.telematics.remote",
 }
 
-var WEB_API_SERVER = map[string]string{
+var webAPIServer = map[string]string{
 	"USA": "https://www.mysubaru.com",
 	"CAN": "https://www.mysubaru.ca",
 }
@@ -44,6 +54,10 @@ var apiURLs = map[string]string{
 	"API_REFRESH_VEHICLES":      "/refreshVehicles.json",
 	"API_SELECT_VEHICLE":        "/selectVehicle.json",
 	"API_VALIDATE_SESSION":      "/validateSession.json",
+	"API_INVALIDATE_SESSION":    "/invalidateSession.json",
+
+	// App startup / availability (maintenance gate, new in app 3.2.7)
+	"API_APP_STATUS": "/appStatus.json",
 
 	// Device management
 	"API_AUTHORIZE_DEVICE": "/authenticateDevice.json",
@@ -207,6 +221,7 @@ var apiURLs = map[string]string{
 	"API_EMERGENCY_CONTACTS":       "/profile/emergencyContacts.json",
 	"API_EMERGENCY_CONTACT_SAVE":   "/profile/saveEmergencyContact.json",
 	"API_EMERGENCY_CONTACT_DELETE": "/profile/deleteEmergencyContact.json",
+	"API_PROFILE_2FA_VERIFY":       "/profile/twoStepAuthVerify.json", // PIN reset gated by 2FA (new in app 3.2.7)
 
 	// Authorized users endpoints
 	"API_AUTHORIZED_USERS":         "/authorized/authorizedUsers.json",
@@ -217,6 +232,9 @@ var apiURLs = map[string]string{
 
 	// JWT token endpoint
 	"API_GENERATE_TOKEN": "/generateToken.json",
+
+	// Microservice endpoints (relative to MICROSERVICE_API_SERVER, Bearer JWT auth)
+	"API_MICRO_VEHICLE_ACCOUNT_ATTRIBUTES": "/micro/vehicleattributes/vehicleAccountAttributes",
 
 	// Additional vehicle endpoints
 	"API_VEHICLE_INFO":                "/vehicleInfo.json",
@@ -233,7 +251,7 @@ var apiURLs = map[string]string{
 }
 
 // Error codes and messages
-var API_ERRORS = map[string]string{
+var apiErrors = map[string]string{
 	// G2 API errors
 	"API_ERROR_SOA_403":                 "403-soa-unableToParseResponseBody",
 	"API_ERROR_SOA_404":                 "404-soa-unableToParseResponseBody",
@@ -279,24 +297,24 @@ var API_ERRORS = map[string]string{
 	"NACK_DEVICE_NOT_AUTHENTICATED":  "DEVICE_NOT_AUTHENTICATED",
 }
 
-// wireToSymbol is the reverse of API_ERRORS (wire label -> symbolic key), built
+// wireToSymbol is the reverse of apiErrors (wire label -> symbolic key), built
 // once so error classification is an O(1) lookup instead of scanning the map.
 var wireToSymbol = func() map[string]string {
-	m := make(map[string]string, len(API_ERRORS))
-	for symbol, label := range API_ERRORS {
+	m := make(map[string]string, len(apiErrors))
+	for symbol, label := range apiErrors {
 		m[label] = symbol
 	}
 	return m
 }()
 
 // isKnownAPIErrorLabel reports whether a wire error label is one the client
-// recognizes (i.e. a value of API_ERRORS).
+// recognizes (i.e. a value of apiErrors).
 func isKnownAPIErrorLabel(label string) bool {
 	_, ok := wireToSymbol[label]
 	return ok
 }
 
-var APP_ERRORS = map[string]string{
+var appErrors = map[string]string{
 	"SUBSCRIPTION_REQUIRED": "active STARLINK Security Plus subscription required",
 }
 
@@ -342,7 +360,7 @@ var features = map[string]string{
 	// Other features
 	"VALET":  "Valet Parking",
 	"TIF_35": "Tire Pressure Front 35",
-	"TIR_33": "Tire Pressure Rear 35",
+	"TIR_33": "Tire Pressure Rear 33",
 	"TLD":    "Tire Pressure Low Detection",
 	"RPOI":   "Remote Geo Point of Interest",
 }
@@ -558,10 +576,6 @@ const (
 	UNKNOWN                      = "UNKNOWN"
 	VENTED                       = "VENTED"
 	LOCATION_VALID               = "location_valid"
-
-	// Timestamp formats
-	TIMESTAMP_FMT          = "%Y-%m-%dT%H:%M:%S%z"
-	POSITION_TIMESTAMP_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 	// Error codes
 	ERROR_SOA_403                    = "403-soa-unableToParseResponseBody"

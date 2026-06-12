@@ -1,6 +1,7 @@
 package mysubaru
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/alex-savin/go-mysubaru/config"
+	"github.com/alex-savin/go-mysubaru/v2/config"
 )
 
 // TestClientStateConcurrentAccess exercises the Client session-state accessors:
@@ -84,6 +85,7 @@ func mockConfig(t *testing.T) *config.Config {
 			},
 			Region:        "TEST",
 			AutoReconnect: true,
+			BaseURL:       "http://127.0.0.1:56765",
 		},
 		TimeZone: "America/New_York",
 		// Logger:   slogt.New(t),
@@ -250,7 +252,7 @@ func TestNew_Success(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
@@ -288,7 +290,7 @@ func TestNew_MultiCarSuccess(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
@@ -356,7 +358,7 @@ func TestSelectVehicle_Success(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	vehicle, err := msc.SelectVehicle("1HGCM82633A004352")
+	vehicle, err := msc.SelectVehicle(context.Background(), "1HGCM82633A004352")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -375,7 +377,7 @@ func TestSelectVehicle_InvalidVIN(t *testing.T) {
 		t.Fatalf("expected no error creating client, got %v", err)
 	}
 
-	if _, err := c.SelectVehicle("INVALIDVIN"); err == nil {
+	if _, err := c.SelectVehicle(context.Background(), "INVALIDVIN"); err == nil {
 		t.Fatalf("expected VIN validation error, got nil")
 	}
 }
@@ -395,12 +397,12 @@ func TestGetVehicleByVin_Success(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	vehicle, err := msc.GetVehicleByVin("1HGCM82633A004352")
+	vehicle, err := msc.GetVehicleByVin(context.Background(), "1HGCM82633A004352")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -409,5 +411,105 @@ func TestGetVehicleByVin_Success(t *testing.T) {
 	}
 	if vehicle.Vin != "1HGCM82633A004352" {
 		t.Errorf("expected vehicle VIN 1HGCM82633A004352, got %v", vehicle.Vin)
+	}
+}
+
+func TestGetAppStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		want     bool
+	}{
+		{
+			name:     "available",
+			response: `{"success":true,"errorCode":null,"dataName":null,"data":null}`,
+			want:     true,
+		},
+		{
+			// A success=false reply is the maintenance gate, not an error.
+			name:     "maintenance window",
+			response: `{"success":false,"errorCode":"SERVER_MAINTENANCE","dataName":null,"data":null}`,
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			routes := []endpointRoute{
+				{Method: http.MethodGet, Path: apiURLs["API_APP_STATUS"], Response: tt.response},
+			}
+			ts := mockServerWithRoutes(t, routes)
+			ts.Start()
+			defer ts.Close()
+
+			msc, err := New(mockConfig(t))
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			available, err := msc.GetAppStatus(context.Background())
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if available != tt.want {
+				t.Errorf("GetAppStatus() = %v, want %v", available, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetAppStatus_NetworkError(t *testing.T) {
+	// No mock server listening: the request must surface a transport error,
+	// not be mistaken for a closed maintenance gate.
+	msc, err := New(mockConfig(t))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if _, err := msc.GetAppStatus(context.Background()); err == nil {
+		t.Fatal("expected error when API is unreachable, got nil")
+	}
+}
+
+func TestLogout(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+	}{
+		{
+			name:     "active session",
+			response: `{"success":true,"errorCode":null,"dataName":null,"data":null}`,
+		},
+		{
+			// An already-dead session on the backend still counts as logged out.
+			name:     "session already invalid",
+			response: `{"success":false,"errorCode":"INVALID_SESSION","dataName":null,"data":null}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			routes := []endpointRoute{
+				{Method: http.MethodGet, Path: apiURLs["API_INVALIDATE_SESSION"], Response: tt.response},
+			}
+			ts := mockServerWithRoutes(t, routes)
+			ts.Start()
+			defer ts.Close()
+
+			msc, err := New(mockConfig(t))
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			msc.isAuthenticated.Store(true)
+			msc.isAlive.Store(true)
+
+			if err := msc.Logout(context.Background()); err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if msc.isAuthenticated.Load() || msc.isAlive.Load() {
+				t.Errorf("expected auth state cleared after Logout, got authenticated=%v alive=%v",
+					msc.isAuthenticated.Load(), msc.isAlive.Load())
+			}
+		})
 	}
 }

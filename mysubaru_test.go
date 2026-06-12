@@ -516,9 +516,9 @@ func TestIsPINLockedError(t *testing.T) {
 func TestIsSessionError(t *testing.T) {
 	// Errors that should trigger re-authentication.
 	for _, err := range []error{
-		ParseAPIError(API_ERRORS["API_ERROR_INVALID_TOKEN"]),
-		ParseAPIError(API_ERRORS["API_ERROR_INVALID_SESSION"]),
-		ParseAPIError(API_ERRORS["API_ERROR_NO_SESSION_ID"]),
+		ParseAPIError(apiErrors["API_ERROR_INVALID_TOKEN"]),
+		ParseAPIError(apiErrors["API_ERROR_INVALID_SESSION"]),
+		ParseAPIError(apiErrors["API_ERROR_NO_SESSION_ID"]),
 		ErrSessionExpired,
 		ErrInvalidSession,
 	} {
@@ -530,7 +530,7 @@ func TestIsSessionError(t *testing.T) {
 	for _, err := range []error{
 		nil,
 		errors.New("some random error"),
-		ParseAPIError(API_ERRORS["NACK_DOOR_AJAR"]),
+		ParseAPIError(apiErrors["NACK_DOOR_AJAR"]),
 		ErrInvalidCredentials,
 	} {
 		if IsSessionError(err) {
@@ -544,17 +544,17 @@ func TestIsSessionError(t *testing.T) {
 func TestParseAPIError_Retryability(t *testing.T) {
 	// InvalidToken must be retryable and preserve its wire code so the retry
 	// layer recognizes it and re-authenticates.
-	tok := ParseAPIError(API_ERRORS["API_ERROR_INVALID_TOKEN"])
+	tok := ParseAPIError(apiErrors["API_ERROR_INVALID_TOKEN"])
 	if !IsRetryableError(tok) {
 		t.Errorf("InvalidToken should be retryable, got %v", tok)
 	}
 	var apiErr APIError
-	if !errors.As(tok, &apiErr) || apiErr.Code != API_ERRORS["API_ERROR_INVALID_TOKEN"] {
-		t.Errorf("InvalidToken should preserve code %q, got %v", API_ERRORS["API_ERROR_INVALID_TOKEN"], tok)
+	if !errors.As(tok, &apiErr) || apiErr.Code != apiErrors["API_ERROR_INVALID_TOKEN"] {
+		t.Errorf("InvalidToken should preserve code %q, got %v", apiErrors["API_ERROR_INVALID_TOKEN"], tok)
 	}
 
 	// Vehicle-side rejections (NACK) must NOT be retried.
-	nack := ParseAPIError(API_ERRORS["NACK_DOOR_AJAR"])
+	nack := ParseAPIError(apiErrors["NACK_DOOR_AJAR"])
 	if IsRetryableError(nack) {
 		t.Errorf("door-ajar NACK should not be retryable, got %v", nack)
 	}

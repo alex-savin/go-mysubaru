@@ -1,6 +1,7 @@
 package mysubaru
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -24,13 +25,13 @@ func TestLockVehicleWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -41,7 +42,7 @@ func TestLockVehicleWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test locking the vehicle
-	_, err = vehicle.Lock()
+	_, err = vehicle.Lock(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error locking vehicle, got %v", err)
 	}
@@ -66,13 +67,13 @@ func TestUnlockVehicleWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -83,7 +84,7 @@ func TestUnlockVehicleWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test unlocking the vehicle
-	_, err = vehicle.Unlock()
+	_, err = vehicle.Unlock(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error unlocking vehicle, got %v", err)
 	}
@@ -108,13 +109,13 @@ func TestStartEngineWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -125,7 +126,7 @@ func TestStartEngineWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test starting the engine
-	_, err = vehicle.EngineStart(10, 0, false)
+	_, err = vehicle.EngineStart(context.Background(), 10, 0, false)
 	if err != nil {
 		t.Fatalf("expected no error starting engine, got %v", err)
 	}
@@ -150,13 +151,13 @@ func TestStopEngineWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -167,7 +168,7 @@ func TestStopEngineWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test stopping the engine
-	_, err = vehicle.EngineStop()
+	_, err = vehicle.EngineStop(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error stopping engine, got %v", err)
 	}
@@ -192,13 +193,13 @@ func TestLightsOnlyWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -209,7 +210,7 @@ func TestLightsOnlyWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test lights only
-	_, err = vehicle.LightsStart()
+	_, err = vehicle.LightsStart(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error with lights only, got %v", err)
 	}
@@ -234,13 +235,13 @@ func TestLocateVehicleWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -251,7 +252,7 @@ func TestLocateVehicleWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test locating the vehicle
-	_, err = vehicle.GetLocation(false)
+	_, err = vehicle.GetLocation(context.Background(), false)
 	if err != nil {
 		t.Fatalf("expected no error locating vehicle, got %v", err)
 	}
@@ -276,13 +277,13 @@ func TestHornAndLightsWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -293,7 +294,7 @@ func TestHornAndLightsWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test horn and lights
-	_, err = vehicle.HornStart()
+	_, err = vehicle.HornStart(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error with horn and lights, got %v", err)
 	}
@@ -318,13 +319,13 @@ func TestChargeNowWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -336,7 +337,7 @@ func TestChargeNowWithFixtures(t *testing.T) {
 
 	// Test charge now (only works for EVs)
 	if vehicle.IsEV() {
-		_, err = vehicle.ChargeOn()
+		_, err = vehicle.ChargeOn(context.Background())
 		if err != nil {
 			t.Fatalf("expected no error with charge now, got %v", err)
 		}
@@ -364,13 +365,13 @@ func TestGetVehicleHealthWithActiveTroubles(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -383,7 +384,7 @@ func TestGetVehicleHealthWithActiveTroubles(t *testing.T) {
 	// Manually set subscription features to enable health check
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
-	err = vehicle.GetVehicleHealth()
+	err = vehicle.GetVehicleHealth(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicle health, got %v", err)
 	}
@@ -441,13 +442,13 @@ func TestGetVehicleStatusWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -457,7 +458,7 @@ func TestGetVehicleStatusWithFixtures(t *testing.T) {
 
 	vehicle := vehicles[0]
 
-	err = vehicle.GetVehicleStatus()
+	err = vehicle.GetVehicleStatus(context.Background())
 	if err == nil {
 		t.Fatal("expected subscription error, got no error")
 	}
@@ -485,13 +486,13 @@ func TestGetVehicleConditionWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -501,7 +502,7 @@ func TestGetVehicleConditionWithFixtures(t *testing.T) {
 
 	vehicle := vehicles[0]
 
-	err = vehicle.GetVehicleCondition()
+	err = vehicle.GetVehicleCondition(context.Background())
 	if err == nil {
 		t.Fatal("expected subscription error, got no error")
 	}
@@ -530,13 +531,13 @@ func TestClimateControlWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -547,7 +548,7 @@ func TestClimateControlWithFixtures(t *testing.T) {
 	vehicle := vehicles[0]
 
 	// Test Subaru presets
-	err = vehicle.GetClimatePresets()
+	err = vehicle.GetClimatePresets(context.Background())
 	if err == nil {
 		t.Fatal("expected subscription error, got no error")
 	}
@@ -556,7 +557,7 @@ func TestClimateControlWithFixtures(t *testing.T) {
 	}
 
 	// Test user presets
-	err = vehicle.GetClimateUserPresets()
+	err = vehicle.GetClimateUserPresets(context.Background())
 	if err == nil {
 		t.Fatal("expected subscription error, got no error")
 	}
@@ -585,13 +586,13 @@ func TestGeofencingWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -604,7 +605,7 @@ func TestGeofencingWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetGeoFenceSettings
-	settings, err := vehicle.GetGeoFenceSettings()
+	settings, err := vehicle.GetGeoFenceSettings(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting geo-fence settings, got %v", err)
 	}
@@ -613,13 +614,13 @@ func TestGeofencingWithFixtures(t *testing.T) {
 	}
 
 	// Test ActivateGeoFence
-	_, err = vehicle.ActivateGeoFence()
+	_, err = vehicle.ActivateGeoFence(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error activating geo-fence, got %v", err)
 	}
 
 	// Test DeactivateGeoFence
-	_, err = vehicle.DeactivateGeoFence()
+	_, err = vehicle.DeactivateGeoFence(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error deactivating geo-fence, got %v", err)
 	}
@@ -645,13 +646,13 @@ func TestSpeedFencingWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -664,7 +665,7 @@ func TestSpeedFencingWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetSpeedFenceSettings
-	settings, err := vehicle.GetSpeedFenceSettings()
+	settings, err := vehicle.GetSpeedFenceSettings(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting speed-fence settings, got %v", err)
 	}
@@ -673,13 +674,13 @@ func TestSpeedFencingWithFixtures(t *testing.T) {
 	}
 
 	// Test ActivateSpeedFence
-	_, err = vehicle.ActivateSpeedFence()
+	_, err = vehicle.ActivateSpeedFence(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error activating speed-fence, got %v", err)
 	}
 
 	// Test DeactivateSpeedFence
-	_, err = vehicle.DeactivateSpeedFence()
+	_, err = vehicle.DeactivateSpeedFence(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error deactivating speed-fence, got %v", err)
 	}
@@ -705,13 +706,13 @@ func TestCurfewWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -724,7 +725,7 @@ func TestCurfewWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetCurfewSettings
-	settings, err := vehicle.GetCurfewSettings()
+	settings, err := vehicle.GetCurfewSettings(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting curfew settings, got %v", err)
 	}
@@ -733,13 +734,13 @@ func TestCurfewWithFixtures(t *testing.T) {
 	}
 
 	// Test ActivateCurfew
-	_, err = vehicle.ActivateCurfew()
+	_, err = vehicle.ActivateCurfew(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error activating curfew, got %v", err)
 	}
 
 	// Test DeactivateCurfew
-	_, err = vehicle.DeactivateCurfew()
+	_, err = vehicle.DeactivateCurfew(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error deactivating curfew, got %v", err)
 	}
@@ -766,13 +767,13 @@ func TestG2FeaturesWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -785,7 +786,7 @@ func TestG2FeaturesWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetValetModeStatus
-	valetSettings, err := vehicle.GetValetModeStatus()
+	valetSettings, err := vehicle.GetValetModeStatus(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting valet mode status, got %v", err)
 	}
@@ -794,31 +795,31 @@ func TestG2FeaturesWithFixtures(t *testing.T) {
 	}
 
 	// Test ValetModeStart
-	_, err = vehicle.ValetModeStart()
+	_, err = vehicle.ValetModeStart(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error starting valet mode, got %v", err)
 	}
 
 	// Test ValetModeStop
-	_, err = vehicle.ValetModeStop()
+	_, err = vehicle.ValetModeStop(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error stopping valet mode, got %v", err)
 	}
 
 	// Test GetTrips - note: may return empty slice or have parsing issues with fixture format
-	trips, _ := vehicle.GetTrips()
+	trips, _ := vehicle.GetTrips(context.Background())
 	// We don't check for error here since parsing the fixture may fail
 	// The important test is that the method can be called
 	_ = trips
 
 	// Test TripLogStart
-	_, err = vehicle.TripLogStart()
+	_, err = vehicle.TripLogStart(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error starting trip log, got %v", err)
 	}
 
 	// Test TripLogStop
-	_, err = vehicle.TripLogStop()
+	_, err = vehicle.TripLogStop(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error stopping trip log, got %v", err)
 	}
@@ -843,13 +844,13 @@ func TestEVOperationsWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -886,13 +887,13 @@ func TestErrorHandlingWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -928,13 +929,13 @@ func TestPOIWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -947,7 +948,7 @@ func TestPOIWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetFavoritePOIs - note: may have parsing issues with fixture format
-	pois, _ := vehicle.GetFavoritePOIs()
+	pois, _ := vehicle.GetFavoritePOIs(context.Background())
 	// We don't check for error here since parsing the fixture may fail
 	// The important test is that the method can be called
 	_ = pois
@@ -959,7 +960,7 @@ func TestPOIWithFixtures(t *testing.T) {
 		Latitude:  40.7128,
 		Longitude: -74.0060,
 	}
-	_, err = vehicle.SendPOI(poi)
+	_, err = vehicle.SendPOI(context.Background(), poi)
 	if err != nil {
 		t.Fatalf("expected no error sending POI, got %v", err)
 	}
@@ -984,13 +985,13 @@ func TestRoadsideAssistanceWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -1003,7 +1004,7 @@ func TestRoadsideAssistanceWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetRoadsideAssistance
-	info, err := vehicle.GetRoadsideAssistance()
+	info, err := vehicle.GetRoadsideAssistance(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting roadside assistance, got %v", err)
 	}
@@ -1031,13 +1032,13 @@ func TestRecallsWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -1050,7 +1051,7 @@ func TestRecallsWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetRecalls - note: may have parsing issues with fixture format
-	recalls, err := vehicle.GetRecalls()
+	recalls, err := vehicle.GetRecalls(context.Background())
 	// We don't check for error here since parsing the fixture may fail
 	// The important test is that the method can be called
 	_ = recalls
@@ -1076,13 +1077,13 @@ func TestWarningLightsWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Get the first vehicle
-	vehicles, err := msc.GetVehicles()
+	vehicles, err := msc.GetVehicles(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting vehicles, got %v", err)
 	}
@@ -1095,7 +1096,7 @@ func TestWarningLightsWithFixtures(t *testing.T) {
 	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
 
 	// Test GetWarningLights
-	lights, err := vehicle.GetWarningLights()
+	lights, err := vehicle.GetWarningLights(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error getting warning lights, got %v", err)
 	}

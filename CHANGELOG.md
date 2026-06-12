@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-12
+
+### ⚠️ Breaking Changes
+
+- **`context.Context` everywhere**: every `Client` and `Vehicle` API method now
+  takes a `ctx context.Context` as its first argument. The context bounds the
+  whole operation — per-attempt HTTP timeout, retry backoff waits, and remote
+  command polling — and cancelling it stops them.
+- **`Authenticate` signature**: `Authenticate() (bool, error, bool)` is now the
+  idiomatic `Authenticate(ctx) (ok bool, needs2FA bool, err error)`.
+- **Exported mutable package state removed**: `MOBILE_API_SERVER`, `MOBILE_APP`,
+  `WEB_API_SERVER`, `API_ERRORS`, and `APP_ERRORS` are now unexported. Use the
+  typed errors (`APIError`, `IsSessionError`, …) for error classification and
+  `config.MySubaru.BaseURL` to point at a different host. The internal
+  `"TEST"` region entry was removed from production code.
+- **`Client` no longer embeds `sync.RWMutex`**: the accidental public
+  `Lock`/`Unlock`/`RLock`/`RUnlock` methods are gone (now an unexported field).
+- Dropped the deprecated `github.com/pkg/errors` dependency; all errors are
+  wrapped with `fmt.Errorf("...: %w", err)` and remain `errors.Is/As`-friendly.
+
+### Added
+
+- **MySubaru app 3.2.7 API updates** (from the decompiled APK reference)
+  - `GetAppStatus(ctx)` - query the app availability / maintenance gate
+    (`appStatus.json`, new in 3.2.7); distinguishes a maintenance window
+    from a transport failure
+  - `Logout(ctx)` - invalidate the session on the backend
+    (`invalidateSession.json`) and clear local auth state
+  - New endpoint constants: `API_APP_STATUS`, `API_INVALIDATE_SESSION`,
+    `API_PROFILE_2FA_VERIFY` (PIN reset via 2FA),
+    `API_MICRO_VEHICLE_ACCOUNT_ATTRIBUTES`
+  - `MICROSERVICE_API_SERVER` base URLs for the JWT-only `/micro/` endpoints
+- `config.MySubaru.BaseURL` (`base_url` in YAML/JSON) to override the regional
+  mobile-API host (QA environments, local mocks)
+
+### Changed
+
+- **Session-validity caching**: any successful API response now counts as proof
+  of session liveness for 4 minutes (the backend expires idle sessions at 5).
+  Within that window, command preambles skip the `validateSession.json` +
+  `selectVehicle.json` round-trips, removing up to 3 HTTP calls per command
+  during bursts.
+- **Centralized HTML-error-page detection**: the transport now detects HTML
+  responses (login redirects, maintenance pages) once in `executeOnce` for all
+  ~50 endpoints, instead of ad-hoc checks at a handful of call sites.
+- Vehicle fetch/save endpoints share a single `fetchInto` helper (subscription
+  check, session validation, vehicle selection, parse), removing several
+  hundred lines of duplicated boilerplate.
+- `GetVehicleByVin()` now returns an error when the vehicle payload fails to
+  parse (previously continued with empty vehicle data) and logs warnings when
+  initial status/condition/health fetches fail
+- Deduplicated HTTP client construction between `New()` and session reset
+- `New()` defaults `updateInterval`/`fetchInterval` from
+  `DEFAULT_UPDATE_INTERVAL`/`DEFAULT_FETCH_INTERVAL` instead of diverging
+  hard-coded literals
+
+### Fixed
+
+- `TIR_33` feature description said "Rear 35" instead of "Rear 33"
+- Typo in the password-warning message ("Mutiple" → "Multiple")
+- Removed dead Python-style `strftime` format constants (`TIMESTAMP_FMT`,
+  `POSITION_TIMESTAMP_FMT`) left over from the subarulink port
+
+### Notes
+
+- API version `g2v33` (3.2.7 moved all `mobileapi` base URLs from `g2v32`;
+  the client already tracks this and auto-bumps on 404)
+- The module path is now `github.com/alex-savin/go-mysubaru/v2`, as Go modules
+  require for v2.0.0+ releases.
+
 ## [1.1.0] - 2026-02-23
 
 ### Added
@@ -130,6 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session token management with automatic renewal
 - PIN verification for sensitive operations
 
-[Unreleased]: https://github.com/alex-savin/go-mysubaru/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/alex-savin/go-mysubaru/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/alex-savin/go-mysubaru/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/alex-savin/go-mysubaru/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/alex-savin/go-mysubaru/releases/tag/v1.0.0
