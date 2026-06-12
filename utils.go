@@ -1,6 +1,7 @@
 package mysubaru
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -36,6 +37,17 @@ func getResponsePreview(body []byte, maxLen int) string {
 // timestamp is a function
 func timestamp() string {
 	return strconv.FormatInt(time.Now().UnixNano()/1000000, 10)
+}
+
+// sleepCtx pauses for d or until ctx is cancelled, returning ctx.Err() in the
+// latter case.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	select {
+	case <-time.After(d):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // urlToGen .

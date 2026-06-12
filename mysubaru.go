@@ -112,9 +112,9 @@ func IsSessionError(err error) bool {
 		return false
 	}
 	switch apiErr.Code {
-	case API_ERRORS["API_ERROR_INVALID_TOKEN"],
-		API_ERRORS["API_ERROR_INVALID_SESSION"],
-		API_ERRORS["API_ERROR_NO_SESSION_ID"],
+	case apiErrors["API_ERROR_INVALID_TOKEN"],
+		apiErrors["API_ERROR_INVALID_SESSION"],
+		apiErrors["API_ERROR_NO_SESSION_ID"],
 		ErrSessionExpired.Code:
 		return true
 	default:
@@ -126,75 +126,75 @@ func IsSessionError(err error) bool {
 func ParseAPIError(errorCode string) error {
 	switch errorCode {
 	// Session/Authentication errors
-	case API_ERRORS["API_ERROR_INVALID_TOKEN"]:
+	case apiErrors["API_ERROR_INVALID_TOKEN"]:
 		// Retryable, and the Code is preserved so executeWithRetry recognizes it
 		// and re-authenticates before retrying.
-		return APIError{Code: API_ERRORS["API_ERROR_INVALID_TOKEN"], Message: "Session token is invalid", Retryable: true}
-	case API_ERRORS["API_ERROR_INVALID_CREDENTIALS"]:
+		return APIError{Code: apiErrors["API_ERROR_INVALID_TOKEN"], Message: "Session token is invalid", Retryable: true}
+	case apiErrors["API_ERROR_INVALID_CREDENTIALS"]:
 		return ErrInvalidCredentials
-	case API_ERRORS["API_ERROR_ACCOUNT_LOCKED"]:
+	case apiErrors["API_ERROR_ACCOUNT_LOCKED"]:
 		return ErrAccountLocked
-	case API_ERRORS["API_ERROR_INVALID_SESSION"]:
+	case apiErrors["API_ERROR_INVALID_SESSION"]:
 		return ErrInvalidSession
-	case API_ERRORS["API_ERROR_NO_SESSION_ID"]:
+	case apiErrors["API_ERROR_NO_SESSION_ID"]:
 		return ErrSessionExpired
-	case API_ERRORS["API_ERROR_TOKEN_GENERATION_FAILED"]:
+	case apiErrors["API_ERROR_TOKEN_GENERATION_FAILED"]:
 		return ErrTokenGenFailed
-	case API_ERRORS["API_ERROR_TOO_MANY_ATTEMPTS"]:
+	case apiErrors["API_ERROR_TOO_MANY_ATTEMPTS"]:
 		return ErrRateLimited
 
 	// Vehicle errors
-	case API_ERRORS["API_ERROR_NO_VEHICLES"]:
+	case apiErrors["API_ERROR_NO_VEHICLES"]:
 		return ErrNoVehicles
-	case API_ERRORS["API_ERROR_VEHICLE_NOT_IN_ACCOUNT"]:
+	case apiErrors["API_ERROR_VEHICLE_NOT_IN_ACCOUNT"]:
 		return ErrVehicleNotInAccount
-	case API_ERRORS["API_ERROR_SERVICE_ALREADY_STARTED"], API_ERRORS["API_ERROR_G1_SERVICE_ALREADY_STARTED"]:
+	case apiErrors["API_ERROR_SERVICE_ALREADY_STARTED"], apiErrors["API_ERROR_G1_SERVICE_ALREADY_STARTED"]:
 		return ErrServiceInProgress
 
 	// G1 SXM errors
-	case API_ERRORS["API_ERROR_G1_NO_SUBSCRIPTION"]:
+	case apiErrors["API_ERROR_G1_NO_SUBSCRIPTION"]:
 		return ErrSubscriptionRequired
-	case API_ERRORS["API_ERROR_G1_STOLEN_VEHICLE"]:
+	case apiErrors["API_ERROR_G1_STOLEN_VEHICLE"]:
 		return ErrStolenVehicle
-	case API_ERRORS["API_ERROR_G1_INVALID_PIN"]:
+	case apiErrors["API_ERROR_G1_INVALID_PIN"]:
 		return ErrInvalidPIN
-	case API_ERRORS["API_ERROR_G1_PIN_LOCKED"]:
+	case apiErrors["API_ERROR_G1_PIN_LOCKED"]:
 		return PINLockedError{MinutesRemaining: 30} // Default, actual time may be in response
 
 	// Negative acknowledgement errors
-	case API_ERRORS["NACK_ACC_IS_ON"]:
+	case apiErrors["NACK_ACC_IS_ON"]:
 		return ErrAccIsOn
-	case API_ERRORS["NACK_DOOR_NOT_CLOSED"]:
+	case apiErrors["NACK_DOOR_NOT_CLOSED"]:
 		return ErrDoorNotClosed
-	case API_ERRORS["NACK_DOOR_AJAR"]:
+	case apiErrors["NACK_DOOR_AJAR"]:
 		return ErrDoorAjar
-	case API_ERRORS["NACK_ENGINE_HOOD_NOT_CLOSED"]:
+	case apiErrors["NACK_ENGINE_HOOD_NOT_CLOSED"]:
 		return ErrEngineHoodOpen
-	case API_ERRORS["NACK_FUEL_LEVEL_TOO_LOW"]:
+	case apiErrors["NACK_FUEL_LEVEL_TOO_LOW"]:
 		return ErrFuelLevelLow
-	case API_ERRORS["NACK_IGNITION_IS_ON"]:
+	case apiErrors["NACK_IGNITION_IS_ON"]:
 		return ErrIgnitionOn
-	case API_ERRORS["NACK_KEY_IN_IGNITION"]:
+	case apiErrors["NACK_KEY_IN_IGNITION"]:
 		return ErrKeyInIgnition
-	case API_ERRORS["NACK_MAX_RES_EXCEEDED"]:
+	case apiErrors["NACK_MAX_RES_EXCEEDED"]:
 		return ErrMaxRESExceeded
-	case API_ERRORS["NACK_MFD_IN_USE"]:
+	case apiErrors["NACK_MFD_IN_USE"]:
 		return ErrMFDInUse
-	case API_ERRORS["NACK_NO_SLOTS_LEFT"]:
+	case apiErrors["NACK_NO_SLOTS_LEFT"]:
 		return ErrNoSlotsLeft
-	case API_ERRORS["NACK_OTHER_COMMANDS_ONGOING"]:
+	case apiErrors["NACK_OTHER_COMMANDS_ONGOING"]:
 		return ErrOtherCommandOngoing
-	case API_ERRORS["NACK_PIN_NOT_SET_IN_HEAD_UNIT"]:
+	case apiErrors["NACK_PIN_NOT_SET_IN_HEAD_UNIT"]:
 		return ErrPINNotSetInHU
-	case API_ERRORS["NACK_RUNNING_ON_BACKUP_BATTERY"]:
+	case apiErrors["NACK_RUNNING_ON_BACKUP_BATTERY"]:
 		return ErrBackupBattery
-	case API_ERRORS["NACK_SECURITY_ALARM_ON"]:
+	case apiErrors["NACK_SECURITY_ALARM_ON"]:
 		return ErrSecurityAlarmOn
-	case API_ERRORS["NACK_VEHICLE_NOT_STATIONARY"]:
+	case apiErrors["NACK_VEHICLE_NOT_STATIONARY"]:
 		return ErrVehicleNotStationary
-	case API_ERRORS["NACK_VEHICLE_NOT_PLUGGED_IN"]:
+	case apiErrors["NACK_VEHICLE_NOT_PLUGGED_IN"]:
 		return ErrNotPluggedIn
-	case API_ERRORS["NACK_DEVICE_NOT_AUTHENTICATED"]:
+	case apiErrors["NACK_DEVICE_NOT_AUTHENTICATED"]:
 		return ErrDeviceNotAuth
 
 	default:
@@ -219,7 +219,7 @@ var apiErrorMessages = map[string]string{
 	"API_ERROR_INVALID_ACCOUNT":         "Invalid Account",
 	"API_ERROR_INVALID_CREDENTIALS":     "Invalid Credentials",
 	"API_ERROR_INVALID_TOKEN":           "Invalid Token",
-	"API_ERROR_PASSWORD_WARNING":        "Mutiple failed login attempts, password warning",
+	"API_ERROR_PASSWORD_WARNING":        "Multiple failed login attempts, password warning",
 	"API_ERROR_TOO_MANY_ATTEMPTS":       "Too many attempts, please try again later",
 	"API_ERROR_ACCOUNT_LOCKED":          "Account Locked",
 	"API_ERROR_NO_VEHICLES":             "No vehicles found for the account",
@@ -603,11 +603,11 @@ func (sr *ServiceRequest) parse(b []byte, logger *slog.Logger) error {
 	if !sr.Success && sr.ErrorCode != "" {
 		logger.Error("error in response", "request", "GetVehicleCondition", "errorCode", sr.ErrorCode, "remoteServiceType", sr.RemoteServiceType)
 		switch sr.ErrorCode {
-		case API_ERRORS["API_ERROR_SERVICE_ALREADY_STARTED"]:
+		case apiErrors["API_ERROR_SERVICE_ALREADY_STARTED"]:
 			return errors.New("error in response: Service already started")
-		case API_ERRORS["API_ERROR_VEHICLE_NOT_IN_ACCOUNT"]:
+		case apiErrors["API_ERROR_VEHICLE_NOT_IN_ACCOUNT"]:
 			return errors.New("error in response: Vehicle not in account")
-		case API_ERRORS["API_ERROR_SOA_403"]:
+		case apiErrors["API_ERROR_SOA_403"]:
 			return errors.New("error in response: Unable to parse response body, SOA 403 error")
 		default:
 			return errors.New("error in response: " + sr.ErrorCode)

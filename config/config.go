@@ -46,6 +46,9 @@ type MySubaru struct {
 	Credentials   Credentials `json:"credentials" yaml:"credentials"`
 	Region        string      `json:"region" yaml:"region"`
 	AutoReconnect bool        `json:"auto_reconnect" yaml:"auto_reconnect"`
+	// BaseURL overrides the regional mobile-API host (e.g. to target a QA
+	// environment or a local mock). Leave empty to use the regional default.
+	BaseURL string `json:"base_url,omitempty" yaml:"base_url,omitempty"`
 }
 
 // Credentials .

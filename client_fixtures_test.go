@@ -1,6 +1,7 @@
 package mysubaru
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -90,7 +91,7 @@ func TestNewWithFixtures_SingleCar(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
@@ -132,7 +133,7 @@ func TestNewWithFixtures_MultiCar(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
@@ -184,12 +185,12 @@ func TestSelectVehicleWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	vehicle, err := msc.SelectVehicle("JF2ABCDE6L0000001")
+	vehicle, err := msc.SelectVehicle(context.Background(), "JF2ABCDE6L0000001")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -228,13 +229,13 @@ func TestSelectVehicleWithVehicleSetupError(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// Despite VEHICLESETUPERROR, we should still get valid vehicle data
-	vehicle, err := msc.SelectVehicle("4S4BTGPD0P3199198")
+	vehicle, err := msc.SelectVehicle(context.Background(), "4S4BTGPD0P3199198")
 	if err != nil {
 		t.Fatalf("expected no error despite VEHICLESETUPERROR, got %v", err)
 	}
@@ -281,14 +282,14 @@ func TestSelectVehicleWithVehicleSetupErrorNoData(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
 	// When VEHICLESETUPERROR is returned without vehicle data, we should get an error
 	// (the session will be reset internally, allowing re-auth on retry)
-	vehicle, err := msc.SelectVehicle("JF2ABCDE6L0000001")
+	vehicle, err := msc.SelectVehicle(context.Background(), "JF2ABCDE6L0000001")
 	if err == nil {
 		t.Fatalf("expected error for VEHICLESETUPERROR without data, got success with vehicle: %v", vehicle)
 	}
@@ -327,12 +328,12 @@ func TestGetVehicleByVinWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	vehicle, err := msc.GetVehicleByVin("JF2ABCDE6L0000001")
+	vehicle, err := msc.GetVehicleByVin(context.Background(), "JF2ABCDE6L0000001")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -371,12 +372,12 @@ func TestValidateSessionWithFixtures(t *testing.T) {
 	}
 
 	// Authenticate the client
-	ok, authErr, _ := msc.Authenticate()
+	ok, _, authErr := msc.Authenticate(context.Background())
 	if !ok || authErr != nil {
 		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
 	}
 
-	valid := msc.validateSession()
+	valid := msc.validateSession(context.Background())
 	if !valid {
 		t.Error("expected session to be valid")
 	}

@@ -2,14 +2,14 @@
 
 [![CI](https://github.com/alex-savin/go-mysubaru/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-savin/go-mysubaru/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/alex-savin/go-mysubaru)](https://goreportcard.com/report/github.com/alex-savin/go-mysubaru)
-[![Go Reference](https://pkg.go.dev/badge/github.com/alex-savin/go-mysubaru.svg)](https://pkg.go.dev/github.com/alex-savin/go-mysubaru)
+[![Go Reference](https://pkg.go.dev/badge/github.com/alex-savin/go-mysubaru/v2.svg)](https://pkg.go.dev/github.com/alex-savin/go-mysubaru/v2)
 
 A Go client library for interacting with the MySubaru API. Supports authentication, vehicle status, remote commands, and more.
 
 ## Installation
 
 ```bash
-go get github.com/alex-savin/go-mysubaru
+go get github.com/alex-savin/go-mysubaru/v2
 ```
 
 ## Quick Start
@@ -18,11 +18,12 @@ go get github.com/alex-savin/go-mysubaru
 package main
 
 import (
+    "context"
     "log"
     "log/slog"
 
-    "github.com/alex-savin/go-mysubaru"
-    "github.com/alex-savin/go-mysubaru/config"
+    "github.com/alex-savin/go-mysubaru/v2"
+    "github.com/alex-savin/go-mysubaru/v2/config"
 )
 
 func main() {
@@ -45,8 +46,10 @@ func main() {
         log.Fatal(err)
     }
 
+    ctx := context.Background()
+
     // Authenticate
-    ok, authErr, needs2FA := client.Authenticate()
+    ok, needs2FA, authErr := client.Authenticate(ctx)
     if needs2FA {
         log.Fatal("Device not registered; 2FA verification required")
     }
@@ -55,7 +58,7 @@ func main() {
     }
 
     // Get vehicles
-    vehicles, err := client.GetVehicles()
+    vehicles, err := client.GetVehicles(ctx)
     if err != nil {
         log.Fatal(err)
     }
@@ -87,6 +90,7 @@ mysubaru:
     deviceid: your-device-id
     devicename: My Go App
   region: USA
+  # base_url: https://mobileapi.qa.subarucs.com  # optional host override (QA, mocks)
 
 logging:
   level: info
@@ -113,7 +117,7 @@ import (
     "time"
 
     "github.com/prometheus/client_golang/prometheus"
-    "github.com/alex-savin/go-mysubaru/config"
+    "github.com/alex-savin/go-mysubaru/v2/config"
 )
 
 type PrometheusMetrics struct {
@@ -203,18 +207,24 @@ If no `Metrics` is provided, a no-op recorder is used.
 
 | Method | Description |
 |--------|-------------|
-| `Authenticate() (bool, error, bool)` | Authenticates with MySubaru. Returns (success, error, needsVerification) |
-| `RequestAuthCode(email string) error` | Requests a 2FA verification code to be sent |
-| `SubmitAuthCode(code string, permanent bool) error` | Submits the 2FA verification code |
+| `Authenticate(ctx) (ok bool, needs2FA bool, err error)` | Authenticates with MySubaru |
+| `RequestAuthCode(ctx, email string) error` | Requests a 2FA verification code to be sent |
+| `SubmitAuthCode(ctx, code string, permanent bool) error` | Submits the 2FA verification code |
+| `GetAppStatus(ctx) (bool, error)` | Checks the API availability / maintenance gate (no auth required) |
+| `Logout(ctx) error` | Invalidates the session on the backend and clears local auth state |
 
 #### Vehicle Management
 
 | Method | Description |
 |--------|-------------|
-| `GetVehicles() ([]*Vehicle, error)` | Returns all vehicles associated with the account |
-| `GetVehicleByVin(vin string) (*Vehicle, error)` | Returns a specific vehicle by VIN |
-| `SelectVehicle(vin string) (*VehicleData, error)` | Selects a vehicle for subsequent operations |
-| `RefreshVehicles() error` | Refreshes vehicle data from the API |
+| `GetVehicles(ctx) ([]*Vehicle, error)` | Returns all vehicles associated with the account |
+| `GetVehicleByVin(ctx, vin string) (*Vehicle, error)` | Returns a specific vehicle by VIN |
+| `SelectVehicle(ctx, vin string) (*VehicleData, error)` | Selects a vehicle for subsequent operations |
+| `RefreshVehicles(ctx) error` | Refreshes vehicle data from the API |
+
+All `Client` and `Vehicle` API methods take a `context.Context` as their first
+argument, which bounds the request (including retries and command polling) and
+allows cancellation.
 
 ### Vehicle Methods
 
@@ -224,22 +234,22 @@ All remote commands return `(chan string, error)`. The channel receives status u
 
 ```go
 // Lock/Unlock
-vehicle.Lock()
-vehicle.Unlock()
+vehicle.Lock(ctx)
+vehicle.Unlock(ctx)
 
 // Remote Start with climate settings
-vehicle.EngineStart(runMinutes, delayMinutes, honkHorn)
-vehicle.EngineStartWithProfile(runMinutes, delayMinutes, honkHorn, profileName)
-vehicle.EngineStop()
+vehicle.EngineStart(ctx, runMinutes, delayMinutes, honkHorn)
+vehicle.EngineStartWithProfile(ctx, runMinutes, delayMinutes, honkHorn, profileName)
+vehicle.EngineStop(ctx)
 
 // Horn & Lights
-vehicle.HornStart()
-vehicle.HornStop()
-vehicle.LightsStart()
-vehicle.LightsStop()
+vehicle.HornStart(ctx)
+vehicle.HornStop(ctx)
+vehicle.LightsStart(ctx)
+vehicle.LightsStop(ctx)
 
 // EV Charging (PHEV/BEV only)
-vehicle.ChargeOn()
+vehicle.ChargeOn(ctx)
 ```
 
 #### Vehicle Information
@@ -288,10 +298,10 @@ vehicle.Troubles["P0301"]  // Trouble{Code: "P0301", Description: "Cylinder 1 Mi
 
 ```go
 // Get available climate presets (Subaru defaults + user presets)
-vehicle.GetClimatePresets()
+vehicle.GetClimatePresets(ctx)
 
 // Get user-defined presets only
-vehicle.GetClimateUserPresets()
+vehicle.GetClimateUserPresets(ctx)
 
 // Access presets
 for name, profile := range vehicle.ClimateProfiles {
@@ -299,7 +309,7 @@ for name, profile := range vehicle.ClimateProfiles {
 }
 
 // Delete a user preset by name
-err := vehicle.DeleteClimateUserPreset("My Winter Preset")
+err := vehicle.DeleteClimateUserPreset(ctx, "My Winter Preset")
 
 // Save a list of user presets (overwrites existing)
 presets := []mysubaru.ClimateProfile{
@@ -316,7 +326,7 @@ presets := []mysubaru.ClimateProfile{
         AirConditionOn:            "false",
     },
 }
-err := vehicle.SaveClimateUserPresets(presets)
+err := vehicle.SaveClimateUserPresets(ctx, presets)
 ```
 
 ### Example: Remote Start with Status Tracking
@@ -325,24 +335,26 @@ err := vehicle.SaveClimateUserPresets(presets)
 package main
 
 import (
+    "context"
     "fmt"
     "log"
 
-    "github.com/alex-savin/go-mysubaru"
-    "github.com/alex-savin/go-mysubaru/config"
+    "github.com/alex-savin/go-mysubaru/v2"
+    "github.com/alex-savin/go-mysubaru/v2/config"
 )
 
 func main() {
     // Setup client...
+    ctx := context.Background()
     cfg := &config.Config{...}
     client, _ := mysubaru.New(cfg)
-    client.Authenticate()
+    client.Authenticate(ctx)
 
-    vehicles, _ := client.GetVehicles()
+    vehicles, _ := client.GetVehicles(ctx)
     vehicle := vehicles[0]
 
     // Start engine with climate profile
-    statusChan, err := vehicle.EngineStartWithProfile(10, 0, false, "Winter")
+    statusChan, err := vehicle.EngineStartWithProfile(ctx, 10, 0, false, "Winter")
     if err != nil {
         log.Fatal(err)
     }
@@ -362,7 +374,7 @@ func main() {
 fmt.Printf("Location: %f, %f\n", vehicle.GeoLocation.Latitude, vehicle.GeoLocation.Longitude)
 
 // Force refresh from vehicle
-statusChan, err := vehicle.GetLocation(true)
+statusChan, err := vehicle.GetLocation(ctx, true)
 if err != nil {
     log.Fatal(err)
 }
@@ -381,7 +393,7 @@ fmt.Printf("Updated: %f, %f (heading %d°)\n",
 ### Example: Check Door and Window States
 
 ```go
-vehicles, _ := client.GetVehicles()
+vehicles, _ := client.GetVehicles(ctx)
 vehicle := vehicles[0]
 
 // Check all doors
@@ -411,11 +423,11 @@ for name, tire := range vehicle.Tires {
 ### Example: Manage Climate Presets
 
 ```go
-vehicles, _ := client.GetVehicles()
+vehicles, _ := client.GetVehicles(ctx)
 vehicle := vehicles[0]
 
 // Fetch all climate presets (Subaru defaults + user-defined)
-vehicle.GetClimatePresets()
+vehicle.GetClimatePresets(ctx)
 
 // List available presets
 fmt.Println("Available climate presets:")
@@ -442,7 +454,7 @@ newPreset := mysubaru.ClimateProfile{
 }
 
 // Get existing user presets and add the new one
-vehicle.GetClimateUserPresets()
+vehicle.GetClimateUserPresets(ctx)
 var userPresets []mysubaru.ClimateProfile
 for _, p := range vehicle.ClimateProfiles {
     if p.PresetType == "userPreset" {
@@ -452,12 +464,12 @@ for _, p := range vehicle.ClimateProfiles {
 userPresets = append(userPresets, newPreset)
 
 // Save (max 4 user presets allowed)
-if err := vehicle.SaveClimateUserPresets(userPresets); err != nil {
+if err := vehicle.SaveClimateUserPresets(ctx, userPresets); err != nil {
     log.Printf("Failed to save presets: %v", err)
 }
 
 // Delete a preset by name
-if err := vehicle.DeleteClimateUserPreset("My Morning Commute"); err != nil {
+if err := vehicle.DeleteClimateUserPreset(ctx, "My Morning Commute"); err != nil {
     log.Printf("Failed to delete preset: %v", err)
 }
 ```
@@ -469,7 +481,7 @@ The library provides typed errors for common API failures:
 ```go
 import "errors"
 
-_, err, _ := client.Authenticate()
+_, err, _ := client.Authenticate(ctx)
 if err != nil {
     var apiErr mysubaru.APIError
     if errors.As(err, &apiErr) {
