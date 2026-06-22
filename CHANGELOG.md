@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Valet status on vehicles without valet mode**: `GetValetModeStatus` and
+  `GetValetModeSettings` no longer fail with `json: cannot unmarshal string into
+  Go value of type mysubaru.ValetModeSettings` when the backend returns the
+  `data` field as a plain string (or null) for a vehicle that doesn't have valet
+  mode provisioned. Those responses are now reported as a disabled (zero-value)
+  configuration instead of an error.
+
 ## [2.0.0] - 2026-06-12
 
 ### ⚠️ Breaking Changes
