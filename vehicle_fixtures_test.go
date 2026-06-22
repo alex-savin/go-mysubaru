@@ -750,7 +750,7 @@ func TestCurfewWithFixtures(t *testing.T) {
 func TestG2FeaturesWithFixtures(t *testing.T) {
 	fixtures := map[string]string{
 		apiURLs["API_LOGIN"]:                "login_single_car.json",
-		apiURLs["API_G2_VALET_MODE_STATUS"]: "valetModeSettings.json",
+		apiURLs["API_VEHICLE_VALET_STATUS"]: "valetModeSettings.json",
 		apiURLs["API_G2_TRIP_LOG_FETCH"]:    "trips.json",
 		apiURLs["API_REMOTE_SVC_STATUS"]:    "remoteServiceStatus.json",
 	}
@@ -822,6 +822,55 @@ func TestG2FeaturesWithFixtures(t *testing.T) {
 	_, err = vehicle.TripLogStop(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error stopping trip log, got %v", err)
+	}
+}
+
+// TestGetValetModeStatus_StringData verifies that a vehicle without valet mode
+// provisioned — where the backend returns the `data` field as a plain JSON
+// string instead of a settings object — is reported as a disabled (zero-value)
+// configuration rather than an unmarshal error. Regression test for the
+// "json: cannot unmarshal string into Go value of type mysubaru.ValetModeSettings"
+// error seen against real accounts.
+func TestGetValetModeStatus_StringData(t *testing.T) {
+	fixtures := map[string]string{
+		apiURLs["API_LOGIN"]:                "login_single_car.json",
+		apiURLs["API_VEHICLE_VALET_STATUS"]: "valetStatusStringData.json",
+	}
+
+	ts := mockMySubaruApiWithFixtures(t, fixtures)
+	ts.Start()
+	defer ts.Close()
+
+	msc, err := New(mockConfig(t))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	ok, _, authErr := msc.Authenticate(context.Background())
+	if !ok || authErr != nil {
+		t.Fatalf("expected authentication to succeed, got ok=%v, err=%v", ok, authErr)
+	}
+
+	vehicles, err := msc.GetVehicles(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error getting vehicles, got %v", err)
+	}
+	if len(vehicles) == 0 {
+		t.Fatal("expected at least one vehicle")
+	}
+
+	vehicle := vehicles[0]
+	vehicle.SubscriptionFeatures = []string{"REMOTE", "SAFETY"}
+
+	settings, err := vehicle.GetValetModeStatus(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error for string-valued valet data, got %v", err)
+	}
+	if settings == nil {
+		t.Fatal("expected non-nil valet settings, got nil")
+	}
+	if settings.Enabled {
+		t.Errorf("expected valet disabled for unprovisioned vehicle, got Enabled=true")
 	}
 }
 

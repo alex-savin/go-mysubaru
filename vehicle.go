@@ -1940,17 +1940,31 @@ type ValetModeSettings struct {
 
 // GetValetModeStatus retrieves the current valet mode status
 func (v *Vehicle) GetValetModeStatus(ctx context.Context) (*ValetModeSettings, error) {
-	var settings ValetModeSettings
-	if err := v.fetchInto(ctx, GET, "API_VEHICLE_VALET_STATUS", map[string]string{"vin": v.Vin}, false, &settings); err != nil {
-		return nil, err
-	}
-	return &settings, nil
+	return v.fetchValetSettings(ctx, "API_VEHICLE_VALET_STATUS", map[string]string{"vin": v.Vin})
 }
 
 // GetValetModeSettings retrieves the valet mode custom settings
 func (v *Vehicle) GetValetModeSettings(ctx context.Context) (*ValetModeSettings, error) {
+	return v.fetchValetSettings(ctx, "API_G2_VALET_SETTINGS_FETCH", map[string]string{})
+}
+
+// fetchValetSettings fetches a valet configuration, tolerating backends that
+// return the `data` field as a plain JSON string (or null) for vehicles that
+// don't have valet mode provisioned. Those responses are reported as a disabled
+// (zero-value) configuration rather than surfaced as an unmarshal error.
+func (v *Vehicle) fetchValetSettings(ctx context.Context, urlKey string, params map[string]string) (*ValetModeSettings, error) {
+	var raw json.RawMessage
+	if err := v.fetchInto(ctx, GET, urlKey, params, false, &raw); err != nil {
+		return nil, err
+	}
+	if isJSONStringOrNull(raw) {
+		v.client.logger.Debug("valet mode not configured for vehicle; backend returned non-object data",
+			"endpoint", urlKey, "vin", v.Vin, "data", string(raw))
+		return &ValetModeSettings{}, nil
+	}
 	var settings ValetModeSettings
-	if err := v.fetchInto(ctx, GET, "API_G2_VALET_SETTINGS_FETCH", map[string]string{}, false, &settings); err != nil {
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		v.client.logger.Error("error parsing valet settings", "endpoint", urlKey, "error", err.Error())
 		return nil, err
 	}
 	return &settings, nil

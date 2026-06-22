@@ -2,6 +2,7 @@ package mysubaru
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -18,6 +19,27 @@ import (
 // Returns true if the response appears to be HTML.
 func isHTMLResponse(body []byte) bool {
 	return strings.HasPrefix(strings.TrimSpace(string(body)), "<")
+}
+
+// isJSONStringOrNull reports whether raw is a JSON string literal or null (or
+// empty), as opposed to an object or array. Some endpoints return their `data`
+// field as a plain status string rather than a structured object when a feature
+// isn't provisioned for a vehicle; callers use this to handle that gracefully
+// instead of failing to unmarshal into a struct.
+func isJSONStringOrNull(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return false
+	}
+	switch v.(type) {
+	case string, nil:
+		return true
+	default:
+		return false
+	}
 }
 
 // errHTMLResponse creates a standard error for when API returns HTML instead of JSON.
